@@ -1,0 +1,23 @@
+{
+  "uid":"cosmos-pe", "title":"D4 — Cosmos Private Endpoint Health",
+  "schemaVersion":39,"version":1,"refresh":"30s","tags":["sre-demo","cosmos"],
+  "time":{"from":"now-1h","to":"now"},
+  "panels":[
+    { "id":1, "type":"timeseries", "title":"Cosmos write errors by ErrorType",
+      "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"ADX"},
+      "targets":[{"query":"AppExceptions | where DependencyName == 'Cosmos' | summarize c=count() by bin(Timestamp,1m), ExceptionType | order by Timestamp asc"}],
+      "gridPos":{"x":0,"y":0,"w":12,"h":7}},
+    { "id":2, "type":"timeseries", "title":"Cosmos call latency (worker)",
+      "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"ADX"},
+      "targets":[{"query":"AppSpans | where DependencyName == 'Cosmos' | summarize p95=percentile(DependencyLatencyMs,95) by bin(Timestamp,1m), ServiceName | order by Timestamp asc"}],
+      "gridPos":{"x":12,"y":0,"w":12,"h":7}},
+    { "id":3, "type":"table", "title":"DNS / Private Endpoint resolution failures",
+      "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"ADX"},
+      "targets":[{"query":"AppExceptions | where DependencyName == 'Cosmos' | where ExceptionType has 'NameResolution' or ExceptionMessage has 'invalid-dns' or ExceptionMessage has 'getaddrinfo' or ExceptionMessage has 'Could not resolve' | top 100 by Timestamp desc | project Timestamp, ExceptionType, ExceptionMessage, CorrelationId, TraceId, ServiceName, Pod"}],
+      "gridPos":{"x":0,"y":7,"w":24,"h":10}},
+    { "id":4, "type":"stat", "title":"Successful Cosmos writes / 5min",
+      "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"ADX"},
+      "targets":[{"query":"AppSpans | where DependencyName == 'Cosmos' and DependencyStatusCode == 200 | summarize ok=count() by bin(Timestamp,5m) | top 1 by Timestamp desc"}],
+      "gridPos":{"x":0,"y":17,"w":12,"h":4}}
+  ]
+}

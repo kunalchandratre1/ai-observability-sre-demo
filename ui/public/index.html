@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AI Observability + SRE Demo — Voice Order</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Voice Order</h1>
+    <small>ai-observability-sre-demo</small>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Submit order</h2>
+      <label>APIM gateway URL <input id="apim-url" placeholder="https://APIM.azure-api.net" /></label>
+      <label>Subscription key <input id="apim-key" type="password" /></label>
+      <label>User id <input id="user-id" value="demo-user" /></label>
+      <label>Order text <textarea id="order-text" rows="3">I want to order one large pepperoni pizza for delivery</textarea></label>
+      <button id="btn-submit">Submit (POST /voice/orders)</button>
+      <button id="btn-burst">Burst x10 (load demo)</button>
+    </section>
+
+    <section class="card">
+      <h2>Last transaction</h2>
+      <div id="ids" class="ids">
+        <div><strong>correlation_id:</strong> <span id="cid">—</span> <button data-copy="cid">copy</button></div>
+        <div><strong>request_id:</strong>     <span id="rid">—</span> <button data-copy="rid">copy</button></div>
+        <div><strong>trace_id:</strong>       <span id="tid">—</span> <button data-copy="tid">copy</button></div>
+        <div><strong>order_id:</strong>       <span id="oid">—</span> <button data-copy="oid">copy</button></div>
+      </div>
+      <pre id="raw"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Per-transaction dependency outcomes <small>(NOT authoritative monitoring — see Grafana)</small></h2>
+      <div id="deps" class="deps"></div>
+    </section>
+
+    <section class="card">
+      <h2>Demo actions</h2>
+      <p>Open Grafana panels for the current trace_id, or trigger a safe fault on the running deployment.</p>
+      <label>Grafana base URL <input id="grafana-url" placeholder="https://aiosre-grafana-demo.weu.grafana.azure.com" /></label>
+      <div class="links">
+        <a id="link-d1" target="_blank">D1 Golden Signals</a>
+        <a id="link-d2" target="_blank">D2 APIM Health</a>
+        <a id="link-d3" target="_blank">D3 AI Deps</a>
+        <a id="link-d4" target="_blank">D4 Cosmos PE</a>
+        <a id="link-d5" target="_blank">D5 Third-party</a>
+        <a id="link-trace" target="_blank">TraceDrilldown(trace_id)</a>
+      </div>
+
+      <h3>Fault toggles (admin endpoint)</h3>
+      <div class="faults">
+        <button data-fault="openai-down">OpenAI down</button>
+        <button data-fault="speech-down">Speech down</button>
+        <button data-fault="thirdparty-down">3rd-party down</button>
+        <button data-fault="cosmos-dns-break">Cosmos DNS break</button>
+        <button data-fault="exception">Force exception</button>
+        <button data-fault="cpu-burn">CPU burn 800ms</button>
+        <button data-fault="reset">Reset all</button>
+      </div>
+      <pre id="fault-state"></pre>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

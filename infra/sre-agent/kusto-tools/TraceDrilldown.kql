@@ -1,0 +1,11 @@
+// TraceDrilldown(trace_id)
+// Returns the full span tree, all logs, and any exceptions tagged with the trace.
+declare query_parameters(trace_id:string = "");
+let spans = AppSpans | where TraceId == trace_id | project Timestamp, EndTimestamp, DurationMs, Name, ServiceName, DependencyName, DependencyStatusCode, DependencyLatencyMs, SpanId, ParentSpanId, CorrelationId, RequestId | order by Timestamp asc;
+let logs  = AppLogs   | where TraceId == trace_id | project Timestamp, ServiceName, SeverityText, Body, Pod;
+let exc   = AppExceptions | where TraceId == trace_id | project Timestamp, ServiceName, ExceptionType, ExceptionMessage, DependencyName, Pod;
+union
+  (spans | extend kind="span"),
+  (logs  | extend kind="log"),
+  (exc   | extend kind="exception")
+| order by Timestamp asc

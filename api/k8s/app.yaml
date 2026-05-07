@@ -1,0 +1,146 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app
+  labels: { name: app }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels: { name: observability }
+---
+# Workload-identity ServiceAccount in the `app` namespace.
+# AZURE_CLIENT_ID is the AKS UAMI client id (passed in via kustomize/helm).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-sa
+  namespace: app
+  annotations:
+    azure.workload.identity/client-id: "REPLACE_WITH_AKS_UAMI_CLIENT_ID"
+  labels:
+    azure.workload.identity/use: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: app
+data:
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
+  SPEECH_REGION: "eastus"
+  SPEECH_ENDPOINT: "REPLACE_SPEECH_ENDPOINT"
+  OPENAI_ENDPOINT: "REPLACE_OPENAI_ENDPOINT"
+  OPENAI_CHAT_DEPLOYMENT: "gpt-4o-mini"
+  COSMOS_ENDPOINT: "REPLACE_COSMOS_ENDPOINT"
+  COSMOS_DATABASE: "orders"
+  COSMOS_CONTAINER: "voice-orders"
+  COSMOS_INCIDENTS_CONTAINER: "IncidentHistory"
+  SERVICEBUS_FQDN: "REPLACE_SB_FQDN"
+  SERVICEBUS_QUEUE: "voice-orders"
+  REDIS_HOST: "REPLACE_REDIS_HOST"
+  THIRD_PARTY_API_URL: "https://uselessfacts.jsph.pl/api/v2/facts/random"
+  AZURE_CLIENT_ID: "REPLACE_WITH_AKS_UAMI_CLIENT_ID"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-service
+  namespace: app
+  labels: { app: api-service }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: api-service } }
+  template:
+    metadata:
+      labels:
+        app: api-service
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: app-sa
+      containers:
+        - name: api
+          image: REPLACE_ACR/api-service:REPLACE_TAG
+          ports: [{ containerPort: 8000, name: http }]
+          envFrom: [{ configMapRef: { name: app-config } }]
+          env:
+            - { name: POD_NAME,   valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+            - { name: NAMESPACE,  valueFrom: { fieldRef: { fieldPath: metadata.namespace } } }
+            - { name: NODE_NAME,  valueFrom: { fieldRef: { fieldPath: spec.nodeName } } }
+            - { name: DEPLOYMENT_VERSION, value: "REPLACE_TAG" }
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          readinessProbe: { httpGet: { path: /api/ready,  port: http }, initialDelaySeconds: 5, periodSeconds: 10 }
+          livenessProbe:  { httpGet: { path: /api/health, port: http }, initialDelaySeconds: 15, periodSeconds: 30 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: app
+spec:
+  selector: { app: api-service }
+  ports: [{ name: http, port: 80, targetPort: 8000 }]
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  namespace: app
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Internal-only ILB so APIM (in same VNet) can reach it; not public.
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - { path: /api, pathType: Prefix, backend: { service: { name: api-service, port: { number: 80 } } } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-service
+  namespace: app
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: api-service }
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource: { name: cpu,    target: { type: Utilization, averageUtilization: 65 } }
+    - type: Resource
+      resource: { name: memory, target: { type: Utilization, averageUtilization: 75 } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-service
+  namespace: app
+  labels: { app: worker-service }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker-service } }
+  template:
+    metadata:
+      labels:
+        app: worker-service
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: app-sa
+      containers:
+        - name: worker
+          image: REPLACE_ACR/worker-service:REPLACE_TAG
+          envFrom: [{ configMapRef: { name: app-config } }]
+          env:
+            - { name: POD_NAME,  valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+            - { name: NAMESPACE, valueFrom: { fieldRef: { fieldPath: metadata.namespace } } }
+            - { name: NODE_NAME, valueFrom: { fieldRef: { fieldPath: spec.nodeName } } }
+            - { name: DEPLOYMENT_VERSION, value: "REPLACE_TAG" }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "300m", memory: "256Mi" }

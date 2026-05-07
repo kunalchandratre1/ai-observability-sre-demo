@@ -1,0 +1,69 @@
+{
+  "uid": "golden-signals",
+  "title": "D1 — End-to-End Golden Signals",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["sre-demo","golden-signals"],
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "service",        "label": "Service",        "type": "custom", "query": "api-service,worker-service", "current": { "value":"api-service" } },
+      { "name": "correlation_id", "label": "correlation_id", "type": "textbox", "current": { "value":"" } },
+      { "name": "trace_id",       "label": "trace_id",       "type": "textbox", "current": { "value":"" } }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "Latency p95 (per dependency, ms)",
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ADX" },
+      "targets": [{
+        "query": "AppSpans | where ServiceName == '$service' | where Name startswith 'dep.' | summarize p95=percentile(DependencyLatencyMs, 95) by bin(Timestamp, 1m), DependencyName | order by Timestamp asc",
+        "resultFormat":"time_series"
+      }],
+      "gridPos": { "x":0, "y":0, "w":12, "h":8 }
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "Errors per minute (AppExceptions)",
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ADX" },
+      "targets": [{
+        "query": "AppExceptions | where ServiceName == '$service' | summarize errors=count() by bin(Timestamp, 1m), DependencyName | order by Timestamp asc",
+        "resultFormat":"time_series"
+      }],
+      "gridPos": { "x":12, "y":0, "w":12, "h":8 }
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Traffic (requests/min)",
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ADX" },
+      "targets": [{
+        "query": "AppSpans | where Name == 'POST /api/orders' or Name endswith '/orders' | summarize req=count() by bin(Timestamp, 1m) | order by Timestamp asc",
+        "resultFormat":"time_series"
+      }],
+      "gridPos": { "x":0, "y":8, "w":12, "h":7 }
+    },
+    {
+      "id": 4, "type": "timeseries", "title": "AKS pod CPU (saturation) — Managed Prometheus",
+      "datasource": { "type":"prometheus", "uid":"Prometheus-AMW" },
+      "targets": [{
+        "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"app\"}[2m]))"
+      }],
+      "gridPos": { "x":12, "y":8, "w":12, "h":7 }
+    },
+    {
+      "id": 5, "type": "table", "title": "Top recent exceptions (filterable by correlation_id/trace_id)",
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ADX" },
+      "targets": [{
+        "query": "AppExceptions | where ServiceName == '$service' | where '$correlation_id' == '' or CorrelationId == '$correlation_id' | where '$trace_id' == '' or TraceId == '$trace_id' | top 100 by Timestamp desc | project Timestamp, ExceptionType, ExceptionMessage, DependencyName, CorrelationId, TraceId, Pod, DeploymentVersion"
+      }],
+      "gridPos": { "x":0, "y":15, "w":24, "h":10 }
+    },
+    {
+      "id": 6, "type": "stat", "title": "Deployment versions in last hour",
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ADX" },
+      "targets": [{
+        "query": "AppLogs | where ServiceName == '$service' | summarize req=count() by DeploymentVersion | top 10 by req desc"
+      }],
+      "gridPos": { "x":0, "y":25, "w":24, "h":4 }
+    }
+  ]
+}

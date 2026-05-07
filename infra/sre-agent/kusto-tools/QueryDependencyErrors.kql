@@ -1,0 +1,12 @@
+// QueryDependencyErrors(timeRange, dependency_name)
+// Per-dependency error rate + latency p95 + status_code distribution; intended for AzureOpenAI/AzureSpeech/ThirdPartyAPI/Cosmos.
+declare query_parameters(timeRange:timespan = 30m, dependency_name:string = "AzureOpenAI");
+let spans = AppSpans | where Timestamp > ago(timeRange) | where DependencyName == dependency_name;
+let exc   = AppExceptions | where Timestamp > ago(timeRange) | where DependencyName == dependency_name;
+union
+( spans | summarize calls=count(), errors=countif(DependencyStatusCode >= 400 or isnotempty(ErrorType)),
+                  p50=percentile(DependencyLatencyMs,50), p95=percentile(DependencyLatencyMs,95)
+        | extend kind="span_summary"),
+( spans | summarize c=count() by tostring(DependencyStatusCode) | extend kind="status_code_distribution"),
+( exc   | summarize c=count() by ExceptionType | extend kind="exception_types"),
+( exc   | top 20 by Timestamp desc | project Timestamp, ExceptionType, ExceptionMessage, CorrelationId, TraceId, Pod | extend kind="recent_exceptions")

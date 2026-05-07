@@ -1,0 +1,13 @@
+<!--
+  Scenario 2: APIM-only fault. Tightens rate limit to 1 call / 60s so the
+  demo client immediately sees 429s without touching the backend.
+-->
+<policies>
+  <inbound>
+    <base />
+    <rate-limit-by-key calls="1" renewal-period="60" counter-key="@(context.Subscription?.Id ?? &quot;anon&quot;)" />
+  </inbound>
+  <backend><base /></backend>
+  <outbound><base /></outbound>
+  <on-error><base /></on-error>
+</policies>

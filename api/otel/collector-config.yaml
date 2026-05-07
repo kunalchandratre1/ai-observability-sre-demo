@@ -1,0 +1,71 @@
+# OpenTelemetry Collector for ai-observability-sre-demo
+# Receives OTLP from api-service + worker-service, exports:
+#  - logs: to Event Hub via Kafka exporter (`aks-otel`)  -> ADX EH data connection ingests JSON
+#  - traces: same pipeline (separate topic per ADX table mapping)
+#  - metrics: scraped by Managed Prometheus via Pod/Service annotations (no OTLP metric export here)
+# Replace ${env:EVENTHUB_FQDN} / ${env:EVENTHUB_NAMESPACE_BOOTSTRAP} via Helm/kubectl ConfigMap.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+  resourcedetection:
+    detectors: [env, system, k8snode]
+  resource:
+    attributes:
+      - key: cluster
+        value: ${env:K8S_CLUSTER_NAME}
+        action: upsert
+
+exporters:
+  # Event Hub via Kafka protocol — ADX Event Hub data connection consumes from `adx` consumer group.
+  kafka/logs:
+    brokers:
+      - ${env:EVENTHUB_NAMESPACE_BOOTSTRAP}        # e.g. aiosre-ehns-demo-xxx.servicebus.windows.net:9093
+    topic: aks-otel
+    encoding: otlp_json
+    protocol_version: 2.0.0
+    auth:
+      sasl:
+        mechanism: PLAIN
+        username: $$ConnectionString
+        password: ${env:EVENTHUB_CONNSTR_LOGS}
+      tls:
+        insecure: false
+  kafka/traces:
+    brokers:
+      - ${env:EVENTHUB_NAMESPACE_BOOTSTRAP}
+    topic: aks-otel
+    encoding: otlp_json
+    protocol_version: 2.0.0
+    auth:
+      sasl:
+        mechanism: PLAIN
+        username: $$ConnectionString
+        password: ${env:EVENTHUB_CONNSTR_LOGS}
+      tls:
+        insecure: false
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [batch, resourcedetection, resource]
+      exporters: [kafka/logs, debug]
+    traces:
+      receivers: [otlp]
+      processors: [batch, resourcedetection, resource]
+      exporters: [kafka/traces, debug]
+  telemetry:
+    logs:
+      level: info
