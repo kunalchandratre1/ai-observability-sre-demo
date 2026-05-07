@@ -1,0 +1,9 @@
+{
+  "loggerId": "/loggers/eh-diag-logger",
+  "alwaysLog": "allErrors",
+  "verbosity": "information",
+  "logClientIp": true,
+  "httpCorrelationProtocol": "W3C",
+  "frontend": { "request": { "headers": ["x-correlation-id","x-request-id","traceparent","tracestate"] }, "response": { "headers": ["x-correlation-id","x-request-id","x-trace-id"] } },
+  "backend":  { "request": { "headers": ["x-correlation-id","x-request-id","traceparent"] }, "response": { "headers": ["x-correlation-id","x-request-id","x-trace-id"] } }
+}

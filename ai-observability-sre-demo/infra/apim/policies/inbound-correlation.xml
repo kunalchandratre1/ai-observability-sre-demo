@@ -1,0 +1,59 @@
+<!--
+  Inbound correlation policy applied to the Voice Orders API.
+  Enforces:
+    - x-correlation-id (create if missing)
+    - x-request-id from APIM context.RequestId (overwrite if missing)
+    - traceparent / tracestate pass-through (W3C)
+    - subscription-key header check (placeholder auth)
+    - rate-limit (used in fault scenario 2)
+-->
+<policies>
+  <inbound>
+    <base />
+
+    <!-- 1. Correlation ID (business txn) -->
+    <set-variable name="cid" value="@(context.Request.Headers.GetValueOrDefault(&quot;x-correlation-id&quot;, Guid.NewGuid().ToString()))" />
+    <set-header name="x-correlation-id" exists-action="override">
+      <value>@((string)context.Variables["cid"])</value>
+    </set-header>
+
+    <!-- 2. Request ID = APIM RequestId -->
+    <set-header name="x-request-id" exists-action="override">
+      <value>@(context.RequestId.ToString())</value>
+    </set-header>
+
+    <!-- 3. W3C trace context pass-through (no-op if not present) -->
+    <choose>
+      <when condition="@(context.Request.Headers.ContainsKey(&quot;traceparent&quot;))">
+        <set-header name="traceparent" exists-action="skip">
+          <value>@(context.Request.Headers.GetValueOrDefault(&quot;traceparent&quot;,&quot;&quot;))</value>
+        </set-header>
+      </when>
+    </choose>
+
+    <!-- 4. Subscription key required (placeholder auth) -->
+    <check-header name="Ocp-Apim-Subscription-Key" failed-check-httpcode="401" failed-check-error-message="Missing subscription key" ignore-case="true" />
+
+    <!-- 5. Rate limit: enabled by Scenario 2 fault.  Default 100/30s; lower it via APIM policy update during demo. -->
+    <rate-limit-by-key calls="100" renewal-period="30" counter-key="@(context.Subscription?.Id ?? &quot;anon&quot;)" />
+  </inbound>
+
+  <backend>
+    <base />
+  </backend>
+
+  <outbound>
+    <base />
+    <!-- Echo IDs back to the caller for UI visibility -->
+    <set-header name="x-correlation-id" exists-action="override">
+      <value>@((string)context.Variables["cid"])</value>
+    </set-header>
+    <set-header name="x-request-id" exists-action="override">
+      <value>@(context.RequestId.ToString())</value>
+    </set-header>
+  </outbound>
+
+  <on-error>
+    <base />
+  </on-error>
+</policies>

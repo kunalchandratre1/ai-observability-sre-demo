@@ -1,0 +1,13 @@
+// DeploymentCorrelation(timeRange)
+// Compares error rate and latency by DeploymentVersion to spot a bad deployment.
+declare query_parameters(timeRange:timespan = 1h);
+let errs = AppExceptions
+  | where Timestamp > ago(timeRange)
+  | summarize errors = count() by DeploymentVersion;
+let lat  = AppSpans
+  | where Timestamp > ago(timeRange) and Name startswith "POST"
+  | summarize p95 = percentile(DurationMs, 95), reqs=count() by DeploymentVersion;
+errs
+| join kind=fullouter lat on DeploymentVersion
+| project DeploymentVersion, errors, reqs, p95_ms=p95, error_rate = todouble(coalesce(errors,0)) / todouble(coalesce(reqs,1))
+| order by error_rate desc

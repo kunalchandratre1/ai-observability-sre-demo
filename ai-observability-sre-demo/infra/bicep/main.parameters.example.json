@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "prefix":             { "value": "aiosre" },
+    "env":                { "value": "demo" },
+    "location":           { "value": "eastus" },
+    "deployerObjectId":   { "value": "<replace-with-az-ad-signed-in-user-object-id>" },
+    "aksNodeCount":       { "value": 2 },
+    "apimSku":            { "value": "Developer" },
+    "apimPublisherEmail": { "value": "sre-demo@example.com" },
+    "apimPublisherName":  { "value": "SRE Demo" },
+    "vpnGatewayEnabled":  { "value": false },
+    "onPremVmEnabled":    { "value": true },
+    "onPremVmPassword":   { "value": "<replace-with-strong-password-or-use-keyvault-reference>" }
+  }
+}

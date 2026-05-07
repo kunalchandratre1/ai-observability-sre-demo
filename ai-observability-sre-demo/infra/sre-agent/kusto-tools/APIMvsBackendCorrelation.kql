@@ -1,0 +1,16 @@
+// APIMvsBackendCorrelation(timeRange, apiOperation)
+// Joins APIM 4xx/5xx with backend AppExceptions/AppSpans on x-correlation-id and traceparent.
+declare query_parameters(timeRange:timespan = 30m, apiOperation:string = "");
+let apim = APIMGatewayLogs
+| where Timestamp > ago(timeRange)
+| where apiOperation == "" or OperationName == apiOperation;
+let badApim = apim | where Status >= 400;
+let backend = AppExceptions | where Timestamp > ago(timeRange);
+let backendSpans = AppSpans | where Timestamp > ago(timeRange) and (DependencyStatusCode >= 400 or isnotempty(ErrorType));
+union
+  (badApim
+    | join kind=leftouter backend on $left.CorrelationId == $right.CorrelationId
+    | project ApimTimestamp=Timestamp, OperationName, ApimStatus=Status, BackendStatus, TotalTimeMs, BackendCorrId=CorrelationId, ExceptionType, ExceptionMessage, BackendDep=DependencyName, BackendPod=Pod
+    | extend kind="apim_join_backend_exceptions"),
+  (badApim | summarize c=count() by Status, OperationName | extend kind="apim_status_distribution"),
+  (backendSpans | summarize c=count() by DependencyName, tostring(DependencyStatusCode) | extend kind="backend_failed_deps")

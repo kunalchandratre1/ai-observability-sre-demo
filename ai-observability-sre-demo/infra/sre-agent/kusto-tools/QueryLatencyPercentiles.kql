@@ -1,0 +1,8 @@
+// QueryLatencyPercentiles(timeRange, service)
+declare query_parameters(timeRange:timespan = 1h, service:string = "api-service");
+AppSpans
+| where Timestamp > ago(timeRange) and ServiceName == service
+| where Name startswith "POST" or Name startswith "GET" or Name startswith "dep."
+| summarize p50=percentile(DurationMs,50), p90=percentile(DurationMs,90), p95=percentile(DurationMs,95), p99=percentile(DurationMs,99), n=count()
+  by bin(Timestamp, 1m), Name
+| order by Timestamp asc

@@ -1,0 +1,16 @@
+// QueryRecentAppErrors(timeRange, service)
+// Most recent application exceptions, grouped by ExceptionType, with sample messages and IDs.
+// Args: timeRange (timespan, e.g. 30m), service (string, e.g. "api-service")
+declare query_parameters(timeRange:timespan = 30m, service:string = "api-service");
+AppExceptions
+| where Timestamp > ago(timeRange)
+| where service == "" or ServiceName == service
+| summarize
+    errors = count(),
+    sample_messages = make_set(ExceptionMessage, 5),
+    sample_correlation_ids = make_set(CorrelationId, 5),
+    sample_trace_ids = make_set(TraceId, 5),
+    versions = make_set(DeploymentVersion, 3),
+    pods = make_set(Pod, 5)
+  by ExceptionType, DependencyName
+| order by errors desc

@@ -1,0 +1,19 @@
+{
+  "uid":"thirdparty","title":"D5 — Third-party Dependency Health",
+  "schemaVersion":39,"version":1,"refresh":"30s","tags":["sre-demo","thirdparty"],
+  "time":{"from":"now-1h","to":"now"},
+  "panels":[
+    { "id":1, "type":"timeseries", "title":"3rd-party latency p95",
+      "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"ADX"},
+      "targets":[{"query":"AppSpans | where DependencyName == 'ThirdPartyAPI' | summarize p95=percentile(DependencyLatencyMs,95) by bin(Timestamp,1m) | order by Timestamp asc"}],
+      "gridPos":{"x":0,"y":0,"w":12,"h":7}},
+    { "id":2, "type":"timeseries", "title":"3rd-party errors/min",
+      "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"ADX"},
+      "targets":[{"query":"AppExceptions | where DependencyName == 'ThirdPartyAPI' | summarize c=count() by bin(Timestamp,1m), ExceptionType | order by Timestamp asc"}],
+      "gridPos":{"x":12,"y":0,"w":12,"h":7}},
+    { "id":3, "type":"table", "title":"Recent 3rd-party failures",
+      "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"ADX"},
+      "targets":[{"query":"AppSpans | where DependencyName == 'ThirdPartyAPI' and (DependencyStatusCode >= 400 or isnotempty(ErrorType)) | top 100 by Timestamp desc | project Timestamp, DependencyEndpoint, DependencyStatusCode, ErrorType, ErrorMessage, CorrelationId, TraceId, Pod"}],
+      "gridPos":{"x":0,"y":7,"w":24,"h":10}}
+  ]
+}

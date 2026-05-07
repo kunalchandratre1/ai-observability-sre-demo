@@ -1,0 +1,26 @@
+apiVersion: 1
+# Datasources for Azure Managed Grafana — kept here as documentation.
+# In Managed Grafana, datasources are created via /api/datasources (see scripts/40-import-grafana.sh).
+datasources:
+  - name: ADX
+    type: grafana-azure-data-explorer-datasource
+    access: proxy
+    isDefault: true
+    jsonData:
+      clusterUrl: https://REPLACE_ADX_CLUSTER.REGION.kusto.windows.net
+      defaultDatabase: observability
+      azureCloud: AzureCloud
+      authType: msi
+  - name: AzureMonitor
+    type: grafana-azure-monitor-datasource
+    access: proxy
+    jsonData:
+      subscriptionId: REPLACE_SUB
+      azureAuthType: msi
+  - name: Prometheus-AMW
+    type: prometheus
+    access: proxy
+    url: https://REPLACE_AMW.prometheus.monitor.azure.com
+    jsonData:
+      httpMethod: POST
+      azureCredentials: { authType: msi }

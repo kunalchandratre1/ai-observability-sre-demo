@@ -1,0 +1,607 @@
+My customer is saying the grafana observability is fine but it is more of dashboard creation. Ultimate aim is correlations and flashing what might have caused the issue in current production system.  
+Example Bajaj contact center application has aks Cosmos db service bus key vault express route on premises vm, azure vm, er Gateway, redis cache, azure speech service, azure open ai. Bfl wants to build observability system which is AI enabled. The AI can see what is happening and keep flashing on UI recent problems being faced and possible causes by analysing logs real time across these systems on azure and on premises. How we can build that? What data we will have to ingest in say azure data lake or adls gen2 on top of which what ai llm will do? What agents will do on this? Can you help to build real world approach and solutions? How AI agent will find problem and root cause analysis atleast with 70 percent accuracy?
+Also how it can identify RCA of the problem and start getting deeper which might have caused the issue like app went down because cpu in aks increased. Cpu in aks pods increased only for specific pods then tell what the value it went and why. May be disk pressure or incoming huge connections made it happen and so on.. think carefully, take your time, act like next generation observability platform and suggest the approach. Thanks.
+
+
+
+Help be build the detailed prompt for below requirement to build demo for customer using GHCP. 
+
+I want to build observability on application overall with Azure services and Azure SRE agent. Ultimate aim is correlations and flashing what might have caused the issue in current production system.  
+Help me build a demo application that has aks Cosmos db service bus key vault express route (or vpn connection orr peering )treated as on premises vm(can be azure VM for demo purpose), azure vm, azure firewall, VPN/ER Gateway, redis cache, azure speech service, azure open ai, github repo source code. I want to build observability system which is AI enabled using Azure managed Grafan and Azure SRE agent. The AI can see what is happening and keep flashing on UI recent problems being faced and possible causes by analysing logs real time across these systems on azure and on premises, firewall, network, app code, database and so on. How we can build that? What data we will have to ingest in say azure data explorer, log analytics, app insights,  on top of which can Azure SRE agent run? What SRE agent will do on this? Can you help to build real world approach and solutions demo? How AI agent will find problem and root cause analysis atleast with 90 percent accuracy?
+
+Also how it can identify RCA of the problem and start getting deeper which might have caused the issue like app went down because cpu in aks increased. Cpu in aks pods increased only for specific pods then tell what the value it went and why. May be disk pressure or incoming huge connections made it happen and so on. Or is it latest deployment that caused the problem and what exactly is causing the problem in application? Or is it application exception happening causing the problem. 
+Build sample application in python, host on relevant azure services mntioned above, buil fault injection system which can be done manually to show the demo, when fault injection done then SRE agent detects it, grafana shows the signs and dashboard stating what might be the issue. Also when corrective action is taken; the fault goes away. the traces of this event and RCA is maintained in the system to refer in future. Then I assume SRE agent learns over time and improves the accuracy. 
+Think carefully, take your time, act like next generation observability platform and suggest the approach. Help me build the demo app with relevant systems, configure monitoring, collect data, build grafana dashboard, then inject faults, show SRE agent how it is acting and giving co-relation, alert, and RCA of the problem. 
+
+Iterated prompt - 
+let's change this prompt to make sure that aks application logs and exceptions etc from AKS goes to ADX and SRE agent will corelate that ADX logs and grafana will also create dashboard from adx logs. AKS metrics logs still goes to prometheus like cpu memory pod restart etc. Rebuild the promt now
+
+Ieration 3 - 
+Also add below things in prompt - 
+In telemetry collection you have not considered apps log collection from aks to adx via code and shown on grafana and also SRE agent referring to adx logs too for any potential RCA. 
+Create repo in teh account - https://github.com/kunalchandratre1?tab=repositories
+Add api layer separate, ui layer separate, api layer interacting with dependent services like cosmos db, add api management configuration also as a part of the demo and metrics logs from api m goes to monitor -> Grafana. Diagnostics logs goes to event hub -> ADX. SRE agent referring to api m logs in monitor or grafana and ADX. 
+Fault injected in backend api and not in api m and detected by SRE agent.
+Then fault injected on api m not on backned api and detected by SRE agent.
+Consider private endpoint for cosmos DB. Inject fault in DNS resolution or private endpoint configuration, api saving data to cosmos failing, visible on grafana dashboard and RCA detected by SRE agent.
+Create a sample API call to any public third party api, show it as part of dashboard, inject fault like api not accessible and visible on grafana, RCA provided by SRE agent.
+Inject fault in code, deployed to app, problems occur, SRE gives RCA.
+For these faults injection, provide steps to correct them and when corrections are done, grfana updates showing healthy things overall. 
+So flow is like fault injected -> Grafana shows problems -> SRE detects RCA. Corrective steps taken and then it shows everything green.
+Add these details to visualization as you see fit. Faults/ problems/ metrics /logs dashboard are visible on grafana and RCA to be provided by SRE agent.
+
+Iteration 4 -
+all bicep. 
+Also I dont want to use foundry openai as ai summarizing for incident. I want it to be part of my app demo functionality and if open ai endpoint is not available, or foundry openai is down then i want RCA via SRE agent to detect and inform it. So it is not optional. Build sample app in such a way that it uses open ai, STT or TTS.
+Add above infomration in prompt and prepare the prompt with above additions. Also I am using GHCP to build this app so GHCP will push the code to Github repo
+
+Iteration 5 - 
+For this prompt append below changes - 
+1) Define three IDs (don’t overload “correlation_id”)
+Add this to your prompt under CRITICAL TELEMETRY ARCHITECTURE (Plane 1) as a “MUST”:
+ID taxonomy (recommended)
+
+trace_id / span_id = OpenTelemetry distributed tracing (W3C trace context)
+correlation_id = business transaction id (one per “Voice Order”, stable across async)
+request_id = per-request id (APIM request id / per HTTP request)
+
+Why: SRE Agent can correlate symptoms across logs/metrics/deployments; trace_id/operation ids make the “evidence chain” precise, and correlation_id makes async hops (Service Bus) provable. The SRE Agent docs explicitly call out the pain of manually correlating across sources and copying operation IDs, and how the agent reduces that by correlating across App Insights/Log Analytics/Monitor/Activity logs.
+2) Where to generate correlation_id (single source of truth)
+Best place: in api-service (FastAPI) at request entry, before calling Speech/OpenAI.
+Add to your prompt in E) Core app business flow:
+
+MUST: correlation_id is created once at the API boundary if not provided by caller. It must persist through the entire flow including Service Bus message and Worker.
+
+Logic:
+
+If UI sends x-correlation-id, use it.
+Else generate a UUID (or ULID) as correlation_id.
+Always return it in response headers + JSON body.
+
+This requires minimal code and gives deterministic RCA for “one order” end-to-end.
+3) Where to propagate (this is what usually breaks RCA)
+A) APIM → backend (HTTP headers)
+Add/strengthen APIM policy requirements (your section B) APIM policies + 3b APIM diagnostics):
+MUST in APIM inbound policy:
+
+If missing, create x-correlation-id
+Forward these headers to backend:
+
+traceparent (if present) / tracestate (if present)
+x-correlation-id
+x-request-id (set from APIM context)
+
+
+Ensure APIM diagnostic event payload includes x-correlation-id, traceparent, operationId/requestId
+
+Why: Your APIM diagnostics go to Event Hub → ADX (APIMGatewayLogs). Unless those fields are in APIM logs too, the agent can’t reliably correlate “APIM 5xx spike” with “backend exceptions for the same IDs”.
+B) backend → Service Bus (message properties)
+Add a MUST line in E) Core flow step 4:
+
+MUST: Service Bus message must carry correlation_id, traceparent, request_id, user_id, order_id as message properties (application properties), and worker must read and reuse them.
+
+This is the most important part for async RCA. Without it, you can still do platform RCA, but the deep “this order caused that worker spike / Cosmos failure” story becomes probabilistic.
+C) worker → Cosmos (document fields)
+Add to prompt in worker spec:
+
+MUST: Cosmos order document includes correlation_id, trace_id, request_id, deployment_version.
+
+This enables postmortems and TraceDrilldown-style tooling to start from Cosmos record and backtrack.
+4) Where to enrich telemetry (logs/spans/exceptions) so SRE Agent can prove RCA
+Your prompt already says “Ensure these fields exist in every log/span/exception”. Make it executable by adding how:
+A) FastAPI middleware (request context)
+Add under AKS APPLICATION TELEMETRY (Plane 1):
+
+MUST: FastAPI middleware injects correlation context into:
+
+OpenTelemetry span attributes (trace context)
+structured logs (JSON) using a request-scoped context store
+
+
+B) OpenTelemetry instrumentation
+You already require OpenTelemetry. Add this requirement:
+
+MUST: All outbound calls (Speech, OpenAI, third-party API) create child spans and record:
+
+dependency_name, endpoint, status_code, error.type, latency_ms
+correlation_id as span attribute
+
+
+This aligns with “agent queries App Insights / logs / metrics and forms hypotheses, validates with evidence and citations”. [sre.azure.com], [github.com], [teams.microsoft.com]
+C) Exception logging
+Add:
+
+MUST: Exceptions must log correlation fields + include error.stack and error.message in AppExceptions table.
+
+5) Concrete “edit blocks” you can paste into your prompt
+(i) Add under B) APIM policies include
+- Correlation policy (MUST):
+  - If header x-correlation-id missing, generate one.
+  - Forward x-correlation-id, traceparent, tracestate to backend.
+  - Set x-request-id from APIM context and forward to backend.
+  - Ensure APIM diagnostic logs include x-correlation-id + traceparent.
+(ii) Add under E) Core flow
+0) Correlation bootstrap (MUST):
+   - API boundary creates/accepts x-correlation-id.
+   - Response returns correlation_id + trace_id.
+4.5) Service Bus propagation (MUST):
+   - Message application properties include correlation_id, traceparent, request_id, user_id, order_id.
+   - Worker extracts and continues trace + logging context.
+(iii) Add under Plane 1 AKS APPLICATION TELEMETRY
+Correlation enforcement (MUST):
+- Every log/span/exception must include:
+  correlation_id (business), trace_id/span_id (OTel), request_id (HTTP/APIM),
+  plus deployment_version/pod/namespace.
+- FastAPI middleware must stamp these on spans + structured JSON logs.
+- Worker must continue context using Service Bus message properties.
+6) Implementation hotspots (so GHCP knows exactly where to put it)
+/api/api-service (FastAPI)
+
+Middleware:
+
+
+Read x-correlation-id (or create)
+Add to response headers
+Put into log context + span attributes
+
+
+OTel:
+
+
+Ensure incoming context supports traceparent
+
+
+Outbound calls:
+
+
+Wrap Speech/OpenAI/3rd party calls in spans and log attributes
+
+/api/worker-service
+
+Read message properties: correlation_id, traceparent
+Start/continue trace for processing span
+Include correlation fields in logs and Cosmos documents
+
+/infra/apim/policies
+
+x-correlation-id create/pass-through
+include in log-to-eventhub payload
+
+/ui
+
+Generate optional correlation id client-side (nice-to-have)
+Always display correlation id returned by backend
+
+Iteration 6 - 
+Refer to below modified prompt with corelation id and related requirements. In the app UI section C it is mentioned below - 
+C) Frontend (/ui)
+- UI calls APIM endpoints only
+- UI shows:
+  - system health cards (API, APIM, Cosmos writes, queue lag, Redis, Speech, OpenAI, third‑party API)
+  - correlation_id + request_id + trace_id returned by backend
+  - buttons to run test flows and trigger SAFE demo actions
+
+Is it ok to show health cards for services on app UI for this demo? as this is more to be shown on grafana. And we might show only normal app specific UIand button to run test flow and trigger safe demo actions? what say? or do u think whatever written in current prompt is good?
+
+Iteration 7 - 
+REfer below prompt and identify if there are red flags or everything looks good now to build this demo application using below prompt?
+
+-------------------------------actual GHCP prompt-----------------------------
+You are GitHub Copilot acting as an expert Azure Solution Architect + SRE + Python engineer.
+Build a complete, deployable demo application and AI-enabled observability/RCA platform on Azure.
+
+IMPORTANT: Use Bicep ONLY for IaC. No Terraform.
+IMPORTANT: You (Copilot) will implement code changes, commit, and push to GitHub repo frequently.
+IMPORTANT: Azure OpenAI and Azure Speech (STT/TTS) are core app functionality (NOT incident summarisation). If they are unavailable, the app must fail gracefully and the observability + SRE Agent must detect and explain RCA.
+
+IMPLEMENTATION RULE: You may ask at most ONE clarification question only if it blocks implementation. Otherwise assume defaults documented in /infra/parameters.md (you must create this file in the first commit).
+
+=====================================================================
+REPO REQUIREMENTS (MUST)
+=====================================================================
+
+1) Create (or initialise if already created) a GitHub repository under:
+[My GitHub repositories](https://github.com/kunalchandratre1?tab=repositories)
+Repo name: ai-observability-sre-demo
+
+2) Repo structure MUST be layered:
+- /api   : backend API + workers (Python) deployed to AKS
+- /ui    : frontend UI calling APIM endpoint
+- /infra : Bicep, deployment scripts, dashboards, policies, runbooks
+- /docs  : demo script, RCA walkthroughs, KQL/PromQL library, screenshots placeholders
+
+3) Copilot must commit & push in milestones:
+- scaffold (includes /infra/parameters.md)
+- infra baseline
+- app baseline
+- telemetry wiring
+- dashboards
+- SRE Agent tools/runbooks
+- fault injection + remediation
+- final demo script
+
+=====================================================================
+SOLUTION ARCHITECTURE (MUST IMPLEMENT)
+=====================================================================
+
+A) AKS Workloads (/api)
+- api-service (FastAPI): main backend
+- worker-service: async consumer (Service Bus) writing to Cosmos DB
+- optional small internal health endpoint/service if required for validation
+
+B) Azure API Management (/infra/apim)
+- APIM is the ONLY public entrypoint (public gateway).
+- Backend (AKS ingress) MUST be private: APIM calls AKS via private connectivity (internal ingress/private LB) in the same VNet.
+- APIM policies MUST include:
+  - authentication placeholder (subscription key or JWT stub)
+  - optional rate limit policy (used for APIM fault injection)
+  - correlation policy (MUST; see section “Correlation & Propagation”)
+  - logging policy: log-to-eventhub to send diagnostics to Event Hub
+
+C) Frontend (/ui)
+- UI shows:
+  - Voice Order workflow UI (upload/record audio, submit, view response)
+  - Transaction status cards (NOT authoritative monitoring):
+    - show per-run dependency outcomes (Speech/OpenAI/3rd party/Cosmos/ServiceBus) for the last transaction
+    - each card displays: status, latency, error (if any), and the correlation_id/trace_id to drill down
+  - correlation_id + request_id + trace_id returned by backend (always visible + copy button)
+  - “Open Grafana” deep links (by dashboard name) and a “Run TraceDrilldown(trace_id)” link pattern
+  - buttons to run test flows and trigger SAFE demo actions
+- UI calls APIM endpoints only
+
+D) Dependencies (MUST)
+- Cosmos DB with Private Endpoint + Private DNS zone
+- Service Bus
+- Key Vault (secrets; prefer managed identity where possible)
+- Redis Cache
+- Azure Speech (STT or TTS) MUST be called in normal flow
+- Azure OpenAI (Foundry/OpenAI endpoint) MUST be called in normal flow
+- Azure VM to simulate “on‑prem” service
+- Azure Firewall + VPN Gateway (or VNet peering fallback)
+
+E) Core app business flow (MUST)
+Voice Order scenario:
+0) Correlation bootstrap (MUST):
+   - api-service reads x-correlation-id if provided by UI, else generates it once.
+   - api-service always returns correlation_id in response headers and JSON.
+   - api-service returns trace_id too (from current span) for debugging convenience.
+1) UI sends audio or text to backend via APIM
+2) Backend uses Speech (STT or TTS) as part of request
+3) Backend uses Azure OpenAI to extract intent / generate response (mandatory)
+4) Backend enqueues message to Service Bus
+4.5) Service Bus propagation (MUST):
+   - message application properties include correlation_id, traceparent, request_id, user_id, order_id
+   - worker extracts and continues trace + logging context
+5) Worker consumes and writes order to Cosmos DB (Private Endpoint)
+6) Response returned with correlation_id + request_id + trace_id
+
+If OpenAI endpoint is down OR Speech is down:
+- backend must fail gracefully with clear error handling
+- Grafana must show dependency failure signals
+- SRE Agent must provide RCA identifying the dependency outage/misconfig
+
+=====================================================================
+CRITICAL TELEMETRY ARCHITECTURE (STRICT ROUTING)
+=====================================================================
+
+Split telemetry into FOUR planes. Follow exactly:
+
+----------------------------
+Plane 1) AKS APPLICATION TELEMETRY (ONLY /api services)
+----------------------------
+MUST GO TO: Azure Data Explorer (ADX/Kusto) as PRIMARY.
+
+MUST: Implement ingestion as:
+OpenTelemetry Collector (AKS) -> Azure Event Hub -> ADX (near real-time ingestion)
+This avoids inventing unsupported “direct ADX exporters” and ensures a reliable demo pipeline.
+
+Collect from code + OpenTelemetry:
+- structured JSON application logs
+- exceptions (stack traces)
+- distributed traces/spans (OTel)
+
+MUST: ID taxonomy (do not overload correlation_id)
+- trace_id / span_id = OpenTelemetry distributed tracing (W3C trace context)
+- correlation_id     = business transaction id (one per Voice Order; stable across async hops)
+- request_id         = per-request id (APIM request id / per HTTP request)
+
+MUST: single source of truth for correlation_id
+- correlation_id is created once at the API boundary (api-service) if not provided:
+  - If UI sends x-correlation-id, use it
+  - Else generate UUID or ULID
+  - Always return in response headers + JSON body
+  - Persist through Service Bus message and worker processing
+
+MUST: correlation enforcement on every signal
+Every log/span/exception must include:
+- correlation_id (business)
+- trace_id/span_id (OTel)
+- request_id (HTTP/APIM)
+- deployment_version, pod, namespace, node
+
+MUST: how to enrich telemetry (make this executable)
+A) FastAPI middleware (request context)
+- Middleware extracts/creates x-correlation-id and x-request-id, and attaches to:
+  - OpenTelemetry span attributes
+  - structured JSON logs via request-scoped context
+- Middleware sets response headers:
+  - x-correlation-id
+  - x-request-id
+  - trace_id (optional header x-trace-id)
+
+B) OpenTelemetry instrumentation
+- All outbound calls MUST create child spans and record:
+  dependency_name, endpoint, status_code, error.type, latency_ms
+  correlation_id as span attribute
+- Dependencies include: Speech, OpenAI, Cosmos, Redis, Service Bus, third-party API
+
+C) Exception logging
+- Exceptions MUST log correlation fields and include:
+  error.message and error.stack in AppExceptions table
+
+ADX tables (minimum):
+- AppLogs
+- AppExceptions
+- AppSpans
+
+Grafana MUST visualise AppLogs/AppExceptions/AppSpans from ADX datasource. 
+SRE Agent MUST query these ADX tables for investigations (via ADX connector + Kusto tools). ------------------------
+Plane 2) AKS INFRA METRICS
+----------------------------
+MUST GO TO: Azure Managed Prometheus (Azure Monitor workspace).
+Metrics include:
+- pod/node CPU & memory
+- restarts/CrashLoopBackOff indicators
+- HPA scaling + saturation
+
+Grafana MUST visualise these from Prometheus datasource (NOT ADX).
+
+----------------------------
+Plane 3) APIM TELEMETRY (IMPORTANT)
+----------------------------
+3a) APIM METRICS -> Azure Monitor -> Grafana
+- APIM platform metrics must be visualised in Grafana via Azure Monitor datasource.
+- Include request rate, latency, 4xx/5xx, capacity/CPU/memory where available.
+
+3b) APIM DIAGNOSTICS -> Event Hub -> ADX
+- Configure APIM Logger + log-to-eventhub policy to send request/trace events to Event Hub (managed identity recommended). 【4-dad95c】【1-ef9fb6】
+- Ingest Event Hub stream into ADX near real-time and store in ADX table APIMGatewayLogs.
+
+MUST: Event payload constraints (APIM log-to-eventhub)
+- Maximum supported message size is 200 KB; larger payloads are truncated. 【1-ef9fb6】
+- Therefore DO NOT log full request/response bodies. Log metadata + IDs + timings only.
+
+MUST: APIM inbound correlation policy (header propagation)
+In APIM inbound policy:
+- If x-correlation-id missing, generate one.
+- Forward to backend:
+  - traceparent (if present)
+  - tracestate (if present)
+  - x-correlation-id
+  - x-request-id set from APIM context.RequestId
+- Ensure the APIM diagnostic event payload logged to Event Hub includes:
+  x-correlation-id, traceparent, tracestate, operationId/requestId, backendResponseCode, totalTimeMs, apiId/operationName
+
+Why: APIM diagnostics land in ADX; unless they carry correlation_id + trace context, SRE Agent can’t deterministically join “APIM spike” to “backend exceptions for same IDs”.
+
+Grafana MUST show APIM diagnostics panels from ADX and APIM metrics panels from Azure Monitor datasource.
+
+----------------------------
+Plane 4) ALL OTHER AZURE PLATFORM/PaaS LOGS (NON-AKS)
+----------------------------
+Services: Cosmos DB, Service Bus, Key Vault, Redis, Firewall, VPN/ER gateway, VM
+MUST GO TO: Log Analytics / Azure Monitor (default).
+Optional: export selective logs to ADX only if needed, but DO NOT move everything to ADX.
+
+=====================================================================
+CORRELATION & PROPAGATION (MUST: WHAT USUALLY BREAKS RCA)
+=====================================================================
+
+A) APIM → backend (HTTP headers)
+- APIM inbound policy MUST enforce:
+  - generate/propagate x-correlation-id
+  - propagate traceparent/tracestate if present
+  - set x-request-id from APIM context and forward
+- APIM log-to-eventhub payload MUST include:
+  x-correlation-id, traceparent, request_id, operationName/apiId, response codes and latency
+
+B) backend → Service Bus (message application properties)
+MUST: Service Bus message must carry these application properties:
+- correlation_id
+- traceparent
+- request_id
+- user_id
+- order_id
+Worker MUST read and reuse them for logging + tracing context.
+
+C) worker → Cosmos (document fields)
+MUST: Cosmos order document includes:
+- correlation_id
+- trace_id
+- request_id
+- deployment_version
+This enables postmortems and “start from a Cosmos record and backtrack”.
+
+=====================================================================
+COSMOS PRIVATE ENDPOINT REQUIREMENT (MUST)
+=====================================================================
+
+- Cosmos DB must be configured with Private Endpoint and Private DNS zone linked to VNet.
+- AKS resolves Cosmos endpoint privately.
+
+MUST: add a validation runbook step and command:
+- Validate from an AKS pod: nslookup <cosmos-account>.documents.azure.com resolves to private endpoint IP
+- Include this command in /docs/runbooks/cosmos-private-endpoint.md
+
+- Provide fault injection scenario: DNS/PE misconfiguration breaks Cosmos writes.
+- Grafana shows AppExceptions with DNS/connect errors; SRE Agent identifies DNS/PE root cause and remediation.
+
+=====================================================================
+THIRD-PARTY PUBLIC API DEPENDENCY REQUIREMENT (MUST)
+=====================================================================
+
+- Backend must call a public third-party API as part of normal flow.
+- Dashboard panels for this dependency from ADX spans/exceptions.
+- Fault injection: dependency unavailable (timeout or block egress).
+- Grafana shows symptom; SRE Agent provides RCA.
+
+=====================================================================
+GRAFANA DASHBOARDS (MUST DELIVER)
+=====================================================================
+
+Grafana datasources (must configure all 3):
+1) ADX datasource:
+   - AppLogs/AppExceptions/AppSpans
+   - APIMGatewayLogs (from Event Hub ingestion) 
+2) Prometheus datasource:
+   - AKS infra metrics
+3) Azure Monitor datasource:
+   - APIM metrics and optional platform metrics
+
+Dashboards required:
+D1) End-to-End Golden Signals
+- Latency p50/p95/p99 computed from AppSpans in ADX
+- Errors from AppExceptions in ADX (by service and dependency_name)
+- Traffic from AppSpans count
+- Saturation from Prometheus (CPU/mem/restarts/HPA)
+- Deployment annotations overlay using deployment_version
+
+D2) APIM Gateway Health (multi-source)
+- APIM metrics (Azure Monitor)
+- APIM diagnostics (ADX from Event Hub)
+- Correlation: APIM 5xx vs backend AppExceptions by matching x-correlation-id and/or traceparent
+
+D3) AI Dependencies Health (mandatory)
+- OpenAI dependency latency/error panels (ADX spans/exceptions)
+- Speech dependency latency/error panels (ADX spans/exceptions)
+
+D4) Cosmos Private Endpoint Health
+- Cosmos write failures (ADX exceptions) breakdown by DNS/connect errors
+
+D5) Third-party Dependency Health
+- third-party call latency/errors (ADX spans/exceptions)
+
+=====================================================================
+AZURE SRE AGENT REQUIREMENTS (MUST)
+=====================================================================
+
+1) Agent setup steps
+- Create Azure SRE Agent resource
+- Connect GitHub repo for code-aware investigations
+- Add ADX connector:
+  - grant agent managed identity viewer access on ADX database
+  - configure and test connector connectivity 【2-78c8ab】【5-d26bcd】
+- Create Kusto tools (deterministic, parameterised) using ADX connector 【3-11400d】
+
+2) Kusto tools (must create and use)
+- QueryRecentAppErrors(timeRange, service)
+- QueryDependencyErrors(timeRange, dependency_name) for OpenAI/Speech/ThirdParty/Cosmos
+- QueryLatencyPercentiles(timeRange, service)
+- TraceDrilldown(trace_id)
+- APIMvsBackendCorrelation(timeRange, apiOperation) joining APIMGatewayLogs with AppExceptions/AppSpans using x-correlation-id and traceparent
+- DeploymentCorrelation(timeRange)
+
+3) RCA output format
+Agent must output:
+- symptom summary
+- timeline: alerts + deploys + config changes
+- evidence chain with exact KQL plus references to:
+  - AKS metrics context from Azure Monitor managed Prometheus (via Azure Monitor tools) OR by referencing Grafana panels (agent does not need to execute PromQL directly). 
+  - Azure Monitor APIM metrics references
+- hypotheses tested/rule-outs
+- root cause statement + confidence score
+- remediation steps + verification steps (“what turns green in Grafana”)
+- persist incident record into Cosmos DB IncidentHistory + /docs/postmortems
+
+=====================================================================
+FAULT INJECTION SCENARIOS (MUST IMPLEMENT 8)
+=====================================================================
+
+For EACH scenario:
+- exact fault injection steps
+- exact corrective steps
+- verification steps (Grafana green)
+- ensure correlation ids and trace context prove RCA
+
+Scenario 1: Backend API fault only (not APIM)
+Scenario 2: APIM fault only (not backend)
+Scenario 3: Cosmos Private Endpoint/DNS fault
+Scenario 4: Azure OpenAI endpoint unavailable
+Scenario 5: Azure Speech endpoint unavailable
+Scenario 6: Third-party API unavailable
+Scenario 7: AKS CPU saturation on specific pods
+Scenario 8: Bad deployment introduces bug
+
+=====================================================================
+BICEP & DEPLOYMENT (MUST)
+=====================================================================
+
+Bicep must provision:
+- Resource groups, VNets, firewall, VPN/peering, private DNS zones
+- AKS
+- Azure Monitor workspace (Managed Prometheus)
+- Azure Managed Grafana
+- ADX cluster + database + tables + permissions + Event Hub ingestion (Data Connection)
+- Event Hubs namespace + hubs for:
+  - APIM diagnostics
+  - AKS app telemetry pipeline (OTel -> Event Hub -> ADX)
+- APIM instance + APIs + policies (including correlation + log-to-eventhub)
+- Cosmos DB + Private Endpoint + Private DNS zone
+- Service Bus, Key Vault, Redis, Speech, Azure OpenAI
+- Log Analytics workspace for non-AKS service logs and diagnostic settings
+
+=====================================================================
+IMPLEMENTATION HOTSPOTS (WHERE TO PUT THE CODE)
+=====================================================================
+
+/api/api-service (FastAPI)
+- Middleware:
+  - read x-correlation-id (or create)
+  - set x-request-id if missing (or accept from APIM)
+  - add headers in response
+  - inject into log context + span attributes
+- OTel:
+  - ensure incoming traceparent supported
+- Outbound calls:
+  - wrap Speech/OpenAI/3rd party in child spans
+  - set dependency_name and record status_code/latency/error fields
+
+/api/worker-service
+- Read Service Bus application properties:
+  - correlation_id, traceparent, request_id, user_id, order_id
+- Continue/start trace for processing span
+- Include correlation fields in logs and Cosmos documents
+
+/infra/apim/policies
+- Correlation policy:
+  - create x-correlation-id if missing
+  - forward x-correlation-id, traceparent, tracestate
+  - set x-request-id from APIM context.RequestId and forward
+- Event Hub logging payload MUST include x-correlation-id + traceparent + request id
+- DO NOT log full request/response bodies (payload size limit) 【1-ef9fb6】
+
+/ui
+- optionally generate a client correlation id (nice-to-have)
+- always display correlation id returned by backend
+
+=====================================================================
+OUTPUT FORMAT (MUST FOLLOW)
+=====================================================================
+
+Return deliverables in this order:
+1) Architecture description + Mermaid diagram
+2) Repo tree + milestone commit plan
+3) Bicep modules + main deployment orchestration
+4) AKS manifests/Helm (services + OTel collector + HPA/limits)
+5) Backend code (/api) with OTel logs/traces/exceptions and correlation propagation
+6) UI code (/ui)
+7) APIM config/policies including correlation + Event Hub logging
+8) ADX schema + ingestion mappings + Event Hub ingestion
+9) Grafana datasources + dashboards (JSON or step-by-step with exact KQL/PromQL)
+10) Azure SRE Agent setup + ADX connector + Kusto tools + prompts
+11) Fault injection + remediation runbooks (all 8 scenarios)
+12) Demo script speaker notes:
+    baseline -> inject -> Grafana symptoms -> SRE Agent RCA -> fix -> verify green -> capture postmortem
+
+BEGIN NOW.
+Proceed to implement and push commits as you complete each milestone.

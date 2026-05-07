@@ -1,0 +1,43 @@
+{
+  "uid": "apim-health",
+  "title": "D2 — APIM Health (multi-source)",
+  "schemaVersion": 39, "version": 1, "refresh": "30s",
+  "tags": ["sre-demo","apim"],
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": { "list": [
+    { "name":"correlation_id", "type":"textbox", "current":{"value":""} }
+  ]},
+  "panels": [
+    {
+      "id":1, "type":"timeseries", "title":"APIM 4xx/5xx (Azure Monitor)",
+      "datasource": { "type":"grafana-azure-monitor-datasource", "uid":"AzureMonitor" },
+      "targets": [
+        { "azureMonitor": { "metricName":"FailedRequests", "aggregation":"Total" }},
+        { "azureMonitor": { "metricName":"SuccessfulRequests", "aggregation":"Total" }}
+      ],
+      "gridPos":{"x":0,"y":0,"w":12,"h":7}
+    },
+    {
+      "id":2, "type":"timeseries", "title":"APIM Latency p95 (Azure Monitor)",
+      "datasource": { "type":"grafana-azure-monitor-datasource", "uid":"AzureMonitor" },
+      "targets": [{ "azureMonitor": { "metricName":"Duration", "aggregation":"P95" }}],
+      "gridPos":{"x":12,"y":0,"w":12,"h":7}
+    },
+    {
+      "id":3, "type":"timeseries", "title":"APIM diagnostics: status by operation (ADX)",
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ADX" },
+      "targets": [{
+        "query":"APIMGatewayLogs | summarize c=count() by bin(Timestamp,1m), Status, OperationName | order by Timestamp asc"
+      }],
+      "gridPos":{"x":0,"y":7,"w":24,"h":8}
+    },
+    {
+      "id":4, "type":"table", "title":"APIM 5xx joined with backend AppExceptions on x-correlation-id",
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ADX" },
+      "targets": [{
+        "query":"let apim5xx = APIMGatewayLogs | where Status >= 500 | project Timestamp, ApiName, OperationName, Status, BackendStatus, TotalTimeMs, CorrelationId, Traceparent, RequestId; let appErr = AppExceptions | project ExcTs=Timestamp, ExceptionType, ExceptionMessage, DependencyName, CorrelationId, ServiceName, Pod; apim5xx | join kind=leftouter appErr on CorrelationId | top 200 by Timestamp desc"
+      }],
+      "gridPos":{"x":0,"y":15,"w":24,"h":12}
+    }
+  ]
+}
