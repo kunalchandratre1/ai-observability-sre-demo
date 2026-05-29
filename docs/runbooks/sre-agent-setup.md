@@ -2,6 +2,42 @@
 
 ## 1. Resource creation
 
+### 1a. Create Log Analytics Workspace
+
+App Insights (workspace-based) requires a LAW as its backing store. Create it first:
+
+1. Portal → **Log Analytics workspaces** → **+ Create**
+
+| Field | Value |
+|---|---|
+| Subscription | `ME-MngEnv106333-kuchandr-1` |
+| Resource group | `ai-obs-sre-demo` |
+| Name | `aiosre-law-demo` |
+| Region | `Australia East` |
+
+2. Click **Review + Create → Create**. Wait for it to complete.
+
+> **Why a dedicated LAW?** The LAW for App Insights only stores the SRE Agent's own operational logs (tool invocations, latency, errors). Keeping it separate from any shared LAW prevents agent noise from polluting application observability queries.
+
+### 1b. Create Application Insights
+
+1. Portal → **Application Insights** → **+ Create**
+
+| Field | Value |
+|---|---|
+| Subscription | `ME-MngEnv106333-kuchandr-1` |
+| Resource group | `ai-obs-sre-demo` |
+| Name | `aiosre-appinsights-demo` |
+| Region | `Australia East` |
+| Resource Mode | Workspace-based |
+| Log Analytics Workspace | `aiosre-law-demo` (created above) |
+
+2. Click **Review + Create → Create**. Wait for it to complete.
+
+> **Note on Application Insights:** this instance is for the SRE Agent's own operational telemetry (tool calls, query latency, errors). It is **not** where your application logs are stored — those flow via OTel → Event Hub → ADX. A separate App Insights for agent telemetry keeps operational noise out of your application observability data.
+
+### 1c. Create SRE Agent
+
 Navigate to **https://sre.azure.com/?create=true** and fill in:
 
 | Field | Value |
@@ -9,9 +45,7 @@ Navigate to **https://sre.azure.com/?create=true** and fill in:
 | Agent name | `aiosre-sre-agent-demo` |
 | Region | `Australia East` |
 | Model provider | Anthropic (preferred) |
-| Application Insights | **Create new** → name `aiosre-appinsights-demo`, same subscription + RG `ai-obs-sre-demo` |
-
-> **Note on Application Insights:** this instance is for the SRE Agent's own operational telemetry (tool calls, query latency, errors). It is **not** where your application logs are stored — those flow via OTel → Event Hub → ADX. A separate App Insights for agent telemetry keeps operational noise out of your application observability data.
+| Application Insights | **Use existing** → select `aiosre-appinsights-demo` |
 
 Click **Review + Create → Deploy**.
 
