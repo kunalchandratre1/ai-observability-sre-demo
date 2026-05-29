@@ -99,14 +99,16 @@ Steps:
 3. Click **Test connection** — must pass (step 2 grants granted ADX Viewer)
 4. Click **Save**
 
-## 4. Connector: Azure Monitor (Azure resources — Plane 2 + Plane 3a + Plane 4)
+## 4. Connector: Azure Monitor (Azure resources — Plane 2 + Plane 3a + Plane 4 metrics)
 
 This connector covers:
-- **Plane 2 — AKS infra metrics**: pod/node CPU, memory, restarts → Azure Managed Prometheus (Azure Monitor workspace)
+- **Plane 2 — AKS infra metrics**: pod/node CPU, memory, restarts → Azure Managed Prometheus (AMW `aiosre-amw-demo`)
 - **Plane 3a — APIM platform metrics**: request rate, latency, 4xx/5xx → Azure Monitor
-- **Plane 4 — PaaS service logs/metrics**: Cosmos DB, Service Bus, Event Hub, Redis, Key Vault, Firewall, VM → Log Analytics / Azure Monitor
+- **Plane 4 — PaaS metrics**: Cosmos DB RU/s, Service Bus queue depth, Redis evictions, Key Vault latency
 
-> Without this connector the agent can see application symptoms in ADX but cannot correlate with infra metrics or PaaS service health.
+> **There is no separate Prometheus connector in SRE Agent.** Azure Managed Prometheus metrics stored in the AMW workspace are accessed through this Azure Monitor connector — the agent queries them via the Azure Monitor Metrics API. When you scope this connector to RG `ai-obs-sre-demo`, the agent automatically discovers and queries `aiosre-amw-demo`.
+
+> Without this connector the agent can see application symptoms in ADX but cannot correlate with AKS infra metrics or PaaS service health.
 
 Steps:
 1. SRE Agent portal → **Full setup** → **Azure resources** → `+`
@@ -122,7 +124,33 @@ Steps:
 
 > **Skip Incidents** — requires ITSM integration (ServiceNow/Jira), not part of this demo.
 
-## 5. Connector: GitHub (Code)
+## 5. Connector: Log Analytics (Plane 4 PaaS diagnostic logs)
+
+This connector gives the agent access to PaaS **diagnostic logs** (as opposed to metrics in section 4):
+- Cosmos DB throttle errors, partition key warnings
+- Service Bus dead-letter events, connection errors
+- Redis connection failures, eviction events
+- Key Vault access audit logs
+- Azure Firewall deny logs
+- VM syslog / Windows event logs
+
+> **Which workspace to select:** Use **`aiosre-la-demo`** — this is where all bicep `diagnosticSettings` route PaaS logs via `logAnalyticsWorkspaceId`.
+>
+> Do **not** select `aiosre-law-demo` — that is the backing store for the SRE Agent's own App Insights operational telemetry. The agent uses it internally; you don't connect to it as an external data source.
+
+Steps:
+1. SRE Agent portal → **Full setup** → **Logging providers** → `+` → **Log Analytics**
+2. Fill in:
+
+| Field | Value |
+|---|---|
+| Connector name | `sre-law-connector` |
+| Log Analytics workspace | `aiosre-la-demo` (ai-obs-sre-demo) |
+
+3. Click **Test connection** → should pass
+4. Click **Save**
+
+## 6. Connector: GitHub (Code)
 
 Allows the agent to correlate errors with source code, recent commits, and deployment changes.
 
@@ -136,7 +164,7 @@ Allows the agent to correlate errors with source code, recent commits, and deplo
 
 3. Click **Save**
 
-## 6. Knowledge Files
+## 7. Knowledge Files
 
 Upload the fault scenario runbooks so the agent knows expected symptoms and remediation steps for each scenario.
 
@@ -152,7 +180,7 @@ Upload the fault scenario runbooks so the agent knows expected symptoms and reme
    - `08-bad-deployment.md`
 3. Click **Done and go to agent**
 
-## 7. Kusto Tools
+## 8. Kusto Tools
 
 Tools give the agent deterministic, parameterised KQL queries it can call during investigations.
 Upload each `.kql` file from `infra/sre-agent/kusto-tools/` via SRE Agent portal → **Tools** → **+ Add KQL tool**.
@@ -168,7 +196,7 @@ Upload each `.kql` file from `infra/sre-agent/kusto-tools/` via SRE Agent portal
 
 For each tool, declare typed parameters matching the `declare query_parameters(...)` block at the top of each `.kql` file.
 
-## 8. System Prompt (Instructions)
+## 9. System Prompt (Instructions)
 
 1. SRE Agent portal → **Instructions** tab
 2. Paste full contents of `infra/sre-agent/prompts/system-prompt.md`
@@ -180,7 +208,7 @@ The system prompt tells the agent:
 - which Kusto tools to call for each fault scenario
 - expected RCA output format (symptom → timeline → evidence chain → root cause → remediation)
 
-## 9. Smoke test
+## 10. Smoke test
 
 Ask the agent: *“Show me the most recent application errors in the last 30 minutes.”*
 
