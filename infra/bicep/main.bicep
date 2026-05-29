@@ -260,6 +260,7 @@ module aks 'modules/aks.bicep' = {
     aksUamiId: identity.outputs.aksUamiId
     monitorWorkspaceId: monitoring.outputs.monitorWorkspaceId
     grafanaId: grafana.outputs.grafanaId
+    dcrPromId: monitoring.outputs.dcrPromId
     tags: tags
   }
 }

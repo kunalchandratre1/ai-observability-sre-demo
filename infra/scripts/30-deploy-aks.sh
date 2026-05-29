@@ -61,4 +61,27 @@ APIM=$(az apim list -g "$RG" --query "[0].name" -o tsv)
 az apim api update -g "$RG" --service-name "$APIM" --api-id voice-orders \
   --service-url "http://$INGRESS_IP/api"
 
+# Create/update the DCRA linking AKS to the Managed Prometheus DCR.
+# This is the missing link that routes ama-metrics pod data to the AMW workspace.
+# (Bicep creates the DCRA on fresh deploys; this handles re-runs and existing clusters.)
+DCR_ID=$(az monitor data-collection rule show \
+  --resource-group "$RG" --name "${PREFIX:-aiosre}-dcr-prom-${ENV:-demo}" \
+  --query id -o tsv 2>/dev/null || true)
+if [[ -z "$DCR_ID" ]]; then
+  # Fall back to AMW-managed DCR (created automatically when AMW is provisioned)
+  AMW_MANAGED_RG=$(az group list --query "[?starts_with(name,'MA_') && contains(name,'-amw-')].name" -o tsv | head -1)
+  DCR_ID=$(az monitor data-collection rule list --resource-group "$AMW_MANAGED_RG" \
+    --query "[0].id" -o tsv 2>/dev/null || true)
+fi
+if [[ -n "$DCR_ID" ]]; then
+  AKS_ID=$(az aks show -g "$RG" -n "$AKS" --query id -o tsv)
+  DCRA_BODY=$(printf '{"properties":{"dataCollectionRuleId":"%s"}}' "$DCR_ID")
+  az rest --method PUT \
+    --url "https://management.azure.com${AKS_ID}/providers/Microsoft.Insights/dataCollectionRuleAssociations/MSProm-${AKS}?api-version=2022-06-01" \
+    --body "$DCRA_BODY" --headers "Content-Type=application/json" -o none
+  echo "DCRA created: ama-metrics -> AMW"
+else
+  echo "WARNING: DCR not found, Managed Prometheus DCRA skipped"
+fi
+
 echo "AKS deployment complete. APIM voice-orders backend -> http://$INGRESS_IP/api"
