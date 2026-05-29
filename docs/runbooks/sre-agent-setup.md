@@ -49,22 +49,52 @@ Navigate to **https://sre.azure.com/?create=true** and fill in:
 
 Click **Review + Create → Deploy**.
 
-The agent runs under the user-assigned managed identity `aiosre-sre-uami-demo` (provisioned by Bicep `identity.bicep`).
+> **Important — SRE Agent auto-creates its own UAMI.** The portal creates a new managed identity named `aiosre-sre-agent-demo-<suffix>` (e.g. `aiosre-sre-agent-demo-dgkedbpaifx6o`). This is **different** from `aiosre-sre-uami-demo` which was pre-provisioned by Bicep. You must grant ADX access to this new identity before the connector test will pass (see step 2 below).
 
-## 2. ADX connector
+## 2. Grant ADX access to the SRE Agent identity
+
+After the agent is deployed, find the auto-created identity name from the portal (SRE Agent → **Overview** → Managed identity) and run:
+
+```powershell
+# Replace <suffix> with the actual suffix shown in the portal
+$sreAgentIdentityName = "aiosre-sre-agent-demo-<suffix>"
+$principalId = az identity show -g ai-obs-sre-demo -n $sreAgentIdentityName --query principalId -o tsv
+
+az kusto database-principal-assignment create `
+  -g ai-obs-sre-demo `
+  --cluster-name aiosreadxdemo4lrdqw `
+  --database-name observability `
+  --principal-assignment-name sre-agent-viewer `
+  --principal-id $principalId `
+  --principal-type App `
+  --role Viewer
+```
+
+Also grant Reader + Monitoring Reader on the RG:
+
+```powershell
+$rgId = az group show -n ai-obs-sre-demo --query id -o tsv
+az role assignment create --assignee $principalId --role "Reader"            --scope $rgId
+az role assignment create --assignee $principalId --role "Monitoring Reader" --scope $rgId
+```
+
+## 3. ADX connector
 - Open the SRE Agent → **Connectors** → **+ Add** → **Azure Data Explorer**.
-- Cluster URI: `https://<adx-cluster>.<region>.kusto.windows.net`
+- Cluster URI: `https://aiosreadxdemo4lrdqw.australiaeast.kusto.windows.net`
 - Database: `observability`
-- Auth: managed identity (the SRE UAMI already has **Database Viewer** role via `adx.bicep` `principalAssignments`).
+- Auth: Managed Identity → select `aiosre-sre-agent-demo-<suffix>`
+- Click **Test connection** — should pass after step 2 above.
 
-## 3. Azure Monitor connector
-- Add the **Azure Monitor** connector. Scope: subscription. The agent's UAMI must have `Monitoring Reader` at the resource group level (granted in `grafana.bicep`/`identity.bicep`; expand to the SRE UAMI if missing).
+## 4. Azure Monitor connector
+- Add the **Azure Monitor** connector. Scope: Resource Group `ai-obs-sre-demo`.
+- Auth: Managed Identity → `aiosre-sre-agent-demo-<suffix>`
+- The `Monitoring Reader` role was granted in step 2 above.
 
-## 4. GitHub connector
+## 5. GitHub connector
 - Add **GitHub** connector. Repo: `https://github.com/kunalchandratre1/ai-observability-sre-demo`.
 - Use a fine-grained PAT with `Contents: Read` and `Metadata: Read`.
 
-## 5. Kusto tools
+## 6. Kusto tools
 Upload each `.kql` file under `infra/sre-agent/kusto-tools/` as a parameterised tool with the same name:
 - QueryRecentAppErrors
 - QueryDependencyErrors
@@ -75,9 +105,9 @@ Upload each `.kql` file under `infra/sre-agent/kusto-tools/` as a parameterised 
 
 For each tool, declare the typed parameters that match `declare query_parameters(...)` at the top of the file.
 
-## 6. System prompt
+## 7. System prompt
 Copy `infra/sre-agent/prompts/system-prompt.md` into the agent's "Instructions" field. Save.
 
-## 7. Smoke test
+## 8. Smoke test
 Ask the agent: *"Show me the most recent application errors in the last 30 minutes."*
 You should see it call `QueryRecentAppErrors(30m, "api-service")` and return a structured RCA-style answer with cited KQL.
