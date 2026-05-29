@@ -1,8 +1,21 @@
 # Azure SRE Agent setup
 
 ## 1. Resource creation
-- See `infra/scripts/50-create-sre-agent.sh`.
-- The agent runs under the user-assigned managed identity `aiosre-sre-uami-demo` (provisioned by Bicep `identity.bicep`).
+
+Navigate to **https://sre.azure.com/?create=true** and fill in:
+
+| Field | Value |
+|---|---|
+| Agent name | `aiosre-sre-agent-demo` |
+| Region | `Australia East` |
+| Model provider | Anthropic (preferred) |
+| Application Insights | **Create new** → name `aiosre-appinsights-demo`, same subscription + RG `ai-obs-sre-demo` |
+
+> **Note on Application Insights:** this instance is for the SRE Agent's own operational telemetry (tool calls, query latency, errors). It is **not** where your application logs are stored — those flow via OTel → Event Hub → ADX. A separate App Insights for agent telemetry keeps operational noise out of your application observability data.
+
+Click **Review + Create → Deploy**.
+
+The agent runs under the user-assigned managed identity `aiosre-sre-uami-demo` (provisioned by Bicep `identity.bicep`).
 
 ## 2. ADX connector
 - Open the SRE Agent → **Connectors** → **+ Add** → **Azure Data Explorer**.
