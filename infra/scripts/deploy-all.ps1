@@ -1,10 +1,11 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    One-click deployment of the full AI Observability SRE Demo.
+    ONE-CLICK deployment of the full AI Observability SRE Demo.
 
 .DESCRIPTION
     Runs all deployment steps in sequence:
+      Step 0  — Deploy Azure infrastructure via Bicep (optional; skip if already deployed)
       Step 1  — Build & push Docker images to ACR (via ACR Tasks, no Docker needed)
       Step 2  — Deploy AKS workloads (nginx-ingress, OTel, api-service, worker-service)
       Step 3  — Bootstrap ADX schema + Event Hub data connections
@@ -12,8 +13,14 @@
       Step 5  — Import Grafana datasources + dashboards
       Step 6  — Create SRE Agent (optional, requires GitHub PAT)
 
-    Infrastructure (Bicep) must already be deployed. Run 10-deploy-bicep.sh first
-    if this is a fresh environment.
+    FIRST-TIME SETUP:
+      1. Copy infra/bicep/main.parameters.example.json -> infra/bicep/main.parameters.json
+      2. Edit main.parameters.json (set prefix, location, passwords)
+      3. Run: az login && az group create -n ai-obs-sre-demo -l australiaeast
+      4. Run: .\deploy-all.ps1         (deploys everything including Bicep)
+
+    SUBSEQUENT RE-DEPLOYS (infra already exists):
+      .\deploy-all.ps1 -SkipBicep
 
     All steps are idempotent — safe to re-run after partial failures.
 
@@ -23,6 +30,9 @@
 .PARAMETER Tag
     Docker image tag. Default: auto-generated UTC timestamp (yyyyMMddHHmmss).
     Supply an existing tag with -SkipBuild to skip the build step.
+
+.PARAMETER SkipBicep
+    Skip Step 0 (Bicep infrastructure). Use when infra is already deployed.
 
 .PARAMETER SkipBuild
     Skip Step 1 (build & push). Use when images are already in ACR.
@@ -48,22 +58,30 @@
 .PARAMETER GithubPat
     GitHub PAT for SRE Agent step. Prompted securely if not supplied.
 
+.PARAMETER ParametersFile
+    Path to Bicep parameters JSON. Default: auto-detected from infra/bicep/.
+
 .EXAMPLE
-    # Full fresh deploy (build everything)
+    # FULL FRESH DEPLOY (first time — deploys Bicep + everything)
     .\deploy-all.ps1
 
 .EXAMPLE
-    # Redeploy with an existing tag (skip build)
-    .\deploy-all.ps1 -Tag 20260529093511 -SkipBuild
+    # Infra already deployed — skip Bicep
+    .\deploy-all.ps1 -SkipBicep
 
 .EXAMPLE
-    # Only apply APIM + Grafana (infrastructure and AKS already running)
-    .\deploy-all.ps1 -SkipBuild -SkipAks -SkipAdx
+    # Redeploy with an existing image tag (skip build + Bicep)
+    .\deploy-all.ps1 -SkipBicep -SkipBuild -Tag 20260529093511
+
+.EXAMPLE
+    # Only update APIM + Grafana
+    .\deploy-all.ps1 -SkipBicep -SkipBuild -SkipAks -SkipAdx
 #>
 [CmdletBinding()]
 param(
-    [string] $ResourceGroup = 'ai-obs-sre-demo',
-    [string] $Tag           = (Get-Date -Format 'yyyyMMddHHmmss'),
+    [string] $ResourceGroup  = 'ai-obs-sre-demo',
+    [string] $Tag            = (Get-Date -Format 'yyyyMMddHHmmss'),
+    [switch] $SkipBicep,
     [switch] $SkipBuild,
     [switch] $SkipAks,
     [switch] $SkipAdx,
@@ -71,7 +89,8 @@ param(
     [switch] $SkipGrafana,
     [switch] $SkipSreAgent,
     [switch] $RunSreAgent,
-    [string] $GithubPat     = ''
+    [string] $GithubPat      = '',
+    [string] $ParametersFile = ''
 )
 
 Set-StrictMode -Version Latest
@@ -123,6 +142,13 @@ Write-Host "  ResourceGroup : $ResourceGroup"
 Write-Host "  Image Tag     : $Tag"
 Write-Host "  Started       : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC"
 Write-Host "============================================================"
+
+# ── Step 0: Bicep infrastructure ──────────────────────────────────────────────
+Invoke-Step -Name 'Step 0/6: Deploy Bicep infrastructure' -Skip $SkipBicep.IsPresent -Action {
+    $bicepArgs = @('-ResourceGroup', $ResourceGroup)
+    if ($ParametersFile) { $bicepArgs += @('-ParametersFile', $ParametersFile) }
+    & "$ScriptDir\10-deploy-bicep.ps1" @bicepArgs
+}
 
 # ── Step 1: Build & push images ───────────────────────────────────────────────
 Invoke-Step -Name 'Step 1/6: Build & push images to ACR' -Skip $SkipBuild.IsPresent -Action {

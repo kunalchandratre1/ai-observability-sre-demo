@@ -166,7 +166,7 @@ $agentBody = @{
     }
     properties = @{
         displayName = "AI Observability SRE Agent"
-        description = "SRE Agent for ai-observability-sre-demo. Investigates AKS/APIM/Cosmos/OpenAI/Speech incidents using ADX telemetry + Managed Prometheus."
+        description = "SRE Agent for ai-observability-sre-demo. Investigates AKS/APIM/Cosmos/OpenAI/Speech incidents using ADX telemetry (AppLogs, AppSpans, AppExceptions, APIMGatewayLogs) and Container Insights (Log Analytics)."
     }
 } | ConvertTo-Json -Depth 10
 
@@ -238,8 +238,7 @@ $amScope = if ($MonitorScope -eq 'subscription') {
     "/subscriptions/$Subscription/resourceGroups/$ResourceGroup"
 }
 Write-Host "     Azure Monitor scope: $amScope"
-$amwList = az resource list -g $ResourceGroup --resource-type 'Microsoft.Monitor/accounts' -o json 2>$null | ConvertFrom-Json
-$amwId   = ($amwList | Select-Object -First 1).id
+# Note: AMW (Managed Prometheus) is not used; Azure Monitor connector uses platform metrics + alerts scope only.
 $amConnectorUrl = "$subPrefix/resourceGroups/$ResourceGroup/providers/Microsoft.SiteReliabilityEngineering/sreAgents/$AgentName/connectors/azure-monitor?api-version=2024-10-01-preview"
 $amConnectorBody = @{
     properties = @{

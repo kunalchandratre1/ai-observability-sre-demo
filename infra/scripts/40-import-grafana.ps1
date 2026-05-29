@@ -29,13 +29,23 @@ $grafanaHost = az grafana show -g $rg -n $grafanaName --query properties.endpoin
 $grafanaHost = $grafanaHost.TrimEnd('/')
 
 $adxCluster  = (az kusto cluster list -g $rg -o json | ConvertFrom-Json)[0].name
-$adxUri      = "https://$adxCluster.australiaeast.kusto.windows.net"
+$location    = az kusto cluster show -g $rg -n $adxCluster --query location -o tsv
+$adxUri      = "https://$adxCluster.$location.kusto.windows.net"
 $adxDb       = 'observability'
 
 $subId       = az account show --query id -o tsv
+$tenantId    = az account show --query tenantId -o tsv
+
+# Resolve Log Analytics workspace (for Container Insights panels in D1)
+# Prefer the app+PaaS LAW (aiosre-la-demo) over the SRE Agent backing LAW (aiosre-law-demo)
+$lawList     = az monitor log-analytics workspace list -g $rg -o json | ConvertFrom-Json
+$lawName     = ($lawList | Where-Object { $_.name -like '*-la-*' } | Select-Object -First 1)
+if (-not $lawName) { $lawName = $lawList | Select-Object -First 1 }
+$lawResourceId = $lawName.id
 
 Write-Host "  Grafana      : $grafanaHost"
 Write-Host "  ADX URI      : $adxUri"
+Write-Host "  LAW          : $($lawName.name)"
 
 # ── Ensure Grafana Admin role for current user (idempotent) ──────────────────
 Write-Host ""
@@ -100,9 +110,19 @@ $DashboardsDir = Resolve-Path (Join-Path $ScriptDir '../grafana/dashboards')
 
 $dashboards = Get-ChildItem $DashboardsDir -Filter '*.json' | Sort-Object Name
 foreach ($f in $dashboards) {
-    $result = az grafana dashboard import -n $grafanaName --definition $f.FullName --overwrite 2>&1 | ConvertFrom-Json
+    # Template-substitute dashboard placeholders with live resource IDs
+    $dashJson = Get-Content $f.FullName -Raw -Encoding utf8
+    $dashJson = $dashJson -replace '\{\{LAW_RESOURCE_ID\}\}', $lawResourceId
+    $dashJson = $dashJson -replace '\{\{SUBSCRIPTION_ID\}\}', $subId
+    $dashJson = $dashJson -replace '\{\{TENANT_ID\}\}', $tenantId
+
+    $tmpDash = [System.IO.Path]::GetTempFileName() + '.json'
+    $dashJson | Set-Content $tmpDash -Encoding utf8
+
+    $result = az grafana dashboard import -n $grafanaName --definition $tmpDash --overwrite 2>&1 | ConvertFrom-Json
     $status = if ($result.status) { $result.status } else { 'ok' }
     Write-Host "  $($f.Name): $status"
+    Remove-Item $tmpDash -ErrorAction SilentlyContinue
 }
 
 # ── [3/3] Summary ─────────────────────────────────────────────────────────────

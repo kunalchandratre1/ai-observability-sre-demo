@@ -42,10 +42,15 @@
       "gridPos": { "x":0, "y":8, "w":12, "h":7 }
     },
     {
-      "id": 4, "type": "timeseries", "title": "AKS pod CPU (saturation) — Managed Prometheus",
-      "datasource": { "type":"prometheus", "uid":"Prometheus-AMW" },
+      "id": 4, "type": "timeseries", "title": "AKS pod CPU cores (Container Insights — Log Analytics)",
+      "datasource": { "type":"grafana-azure-monitor-datasource", "uid":"AzureMonitor" },
       "targets": [{
-        "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"app\"}[2m]))"
+        "queryType": "Azure Log Analytics",
+        "azureLogAnalytics": {
+          "query": "InsightsMetrics | where TimeGenerated >= ago(1h) | where Namespace == 'container.azm.ms/cpuUsageNanoCores' | where Name == 'cpuUsageNanoCores' | extend pod = tostring(Tags.podName), namespace = tostring(Tags.namespace) | where namespace == 'app' | summarize avg_cores = avg(Val / 1e9) by bin(TimeGenerated, 1m), pod | order by TimeGenerated asc",
+          "resultFormat": "time_series",
+          "resources": ["{{LAW_RESOURCE_ID}}"]
+        }
       }],
       "gridPos": { "x":12, "y":8, "w":12, "h":7 }
     },

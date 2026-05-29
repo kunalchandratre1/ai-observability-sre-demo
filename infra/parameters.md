@@ -21,9 +21,8 @@
 | `openAiSku` | `S0` | deploys `gpt-4o-mini` + `whisper` |
 | `adxSku` | `Dev(No SLA)_Standard_E2a_v4` | single node |
 | `eventHubSku` | `Standard` | 2 hubs: `apim-diag`, `aks-otel` |
-| `monitorWorkspace` | created | Azure Monitor workspace (Managed Prometheus) |
-| `grafanaSku` | `Standard` | Azure Managed Grafana |
-| `logAnalyticsSku` | `PerGB2018` | for non-AKS PaaS diag |
+| `logAnalyticsSku` | `PerGB2018` | for AKS Container Insights + non-AKS PaaS diagnostics |
+| `containerInsightsEnabled` | `true` | AKS omsagent addon sends to LAW; feeds Container Insights tables (InsightsMetrics, Perf) |
 | `vpnGatewayEnabled` | `false` | use VNet peering by default to save cost; toggle true to add VPN GW |
 | `firewallSku` | `Standard` | |
 | `onPremVmEnabled` | `true` | Azure VM in peered "on-prem" VNet |

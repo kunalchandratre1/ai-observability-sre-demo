@@ -1,10 +1,13 @@
 # Demo Script (speaker notes)
 
 ## Stage 0 — Setup (one-off, before the room)
-1. `infra/scripts/00-bootstrap.sh` then `10-deploy-bicep.sh` (~ 25 min).
-2. `15-bootstrap-adx.sh`, `20-build-and-push.sh`, `30-deploy-aks.sh`, `35-apim-policies.sh`, `40-import-grafana.sh`, `50-create-sre-agent.sh`.
-3. Open the UI (`ui/public/index.html`) and paste the APIM gateway URL + a subscription key.
-4. Open three tabs: **UI**, **Azure Managed Grafana** (D1), **Azure SRE Agent** chat.
+1. Copy `infra/bicep/main.parameters.example.json` → `infra/bicep/main.parameters.json`; fill in prefix, location, passwords.
+2. `az group create -n ai-obs-sre-demo -l australiaeast`
+3. **One-click deploy**: `cd infra/scripts && .\deploy-all.ps1` (~35-45 min; idempotent).
+   - Re-deploy on existing infra: `.\deploy-all.ps1 -SkipBicep`
+4. Complete SRE Agent portal steps per `docs/runbooks/sre-agent-setup.md`.
+5. Open the UI (`ui/public/index.html`) and paste the APIM gateway URL + a subscription key.
+6. Open three tabs: **UI**, **Azure Managed Grafana** (D1), **Azure SRE Agent** chat.
 
 ## Stage 1 — Baseline (2 min)
 - "This is a Voice-Order app. UI → APIM → AKS (FastAPI) → Speech + OpenAI + 3rd-party API → Service Bus → worker → Cosmos."
@@ -13,9 +16,9 @@
 - Talking point: "Every signal — log, span, exception, APIM diagnostic — carries the same `correlation_id`. That is the entire trick."
 
 ## Stage 2 — Telemetry split (2 min)
-- Open the data sources panel: ADX, Managed Prometheus, Azure Monitor.
-- D1 panel "AKS pod CPU" comes from Prometheus; everything else from ADX. APIM metrics from Azure Monitor (D2).
-- "We deliberately did NOT shove everything into ADX. Each plane has the right tool."
+- Open the data sources panel: ADX, Azure Monitor.
+- D1 panel "AKS pod CPU" comes from **Container Insights** (Log Analytics InsightsMetrics via Azure Monitor datasource); all application signals come from ADX. APIM metrics from Azure Monitor (D2).
+- "We deliberately did NOT shove everything into ADX. Each plane has the right tool. AKS infra metrics stay in Log Analytics via Container Insights — and the SRE Agent can query them via the Log Analytics connector."
 
 ## Stage 3 — Run all 8 fault scenarios
 
