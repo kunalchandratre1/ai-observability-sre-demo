@@ -78,36 +78,122 @@ az role assignment create --assignee $principalId --role "Reader"            --s
 az role assignment create --assignee $principalId --role "Monitoring Reader" --scope $rgId
 ```
 
-## 3. ADX connector
-- Open the SRE Agent → **Connectors** → **+ Add** → **Azure Data Explorer**.
-- Cluster URI: `https://aiosreadxdemo4lrdqw.australiaeast.kusto.windows.net`
-- Database: `observability`
-- Auth: Managed Identity → select `aiosre-sre-agent-demo-<suffix>`
-- Click **Test connection** — should pass after step 2 above.
+## 3. Connector: Azure Data Explorer (Logs — Plane 1 + Plane 3b)
 
-## 4. Azure Monitor connector
-- Add the **Azure Monitor** connector. Scope: Resource Group `ai-obs-sre-demo`.
-- Auth: Managed Identity → `aiosre-sre-agent-demo-<suffix>`
-- The `Monitoring Reader` role was granted in step 2 above.
+This connector covers:
+- **Plane 1 — AKS application telemetry**: `AppLogs`, `AppSpans`, `AppExceptions` (OTel → Event Hub → ADX pipeline)
+- **Plane 3b — APIM diagnostics**: `APIMGatewayLogs` (APIM log-to-eventhub → Event Hub → ADX)
 
-## 5. GitHub connector
-- Add **GitHub** connector. Repo: `https://github.com/kunalchandratre1/ai-observability-sre-demo`.
-- Use a fine-grained PAT with `Contents: Read` and `Metadata: Read`.
+Steps:
+1. SRE Agent portal → **Full setup** → **Logs** → `+` → **Azure Data Explorer**
+2. Fill in:
 
-## 6. Kusto tools
-Upload each `.kql` file under `infra/sre-agent/kusto-tools/` as a parameterised tool with the same name:
-- QueryRecentAppErrors
-- QueryDependencyErrors
-- QueryLatencyPercentiles
-- TraceDrilldown
-- APIMvsBackendCorrelation
-- DeploymentCorrelation
+| Field | Value |
+|---|---|
+| Connector name | `sredemo-kusto-client` |
+| Cluster URI | `https://aiosreadxdemo4lrdqw.australiaeast.kusto.windows.net` |
+| Database | `observability` |
+| Auth | Managed Identity → `aiosre-sre-agent-demo-<suffix>` |
+| Allow query tools | ✅ checked |
 
-For each tool, declare the typed parameters that match `declare query_parameters(...)` at the top of the file.
+3. Click **Test connection** — must pass (step 2 grants granted ADX Viewer)
+4. Click **Save**
 
-## 7. System prompt
-Copy `infra/sre-agent/prompts/system-prompt.md` into the agent's "Instructions" field. Save.
+## 4. Connector: Azure Monitor (Azure resources — Plane 2 + Plane 3a + Plane 4)
 
-## 8. Smoke test
-Ask the agent: *"Show me the most recent application errors in the last 30 minutes."*
-You should see it call `QueryRecentAppErrors(30m, "api-service")` and return a structured RCA-style answer with cited KQL.
+This connector covers:
+- **Plane 2 — AKS infra metrics**: pod/node CPU, memory, restarts → Azure Managed Prometheus (Azure Monitor workspace)
+- **Plane 3a — APIM platform metrics**: request rate, latency, 4xx/5xx → Azure Monitor
+- **Plane 4 — PaaS service logs/metrics**: Cosmos DB, Service Bus, Event Hub, Redis, Key Vault, Firewall, VM → Log Analytics / Azure Monitor
+
+> Without this connector the agent can see application symptoms in ADX but cannot correlate with infra metrics or PaaS service health.
+
+Steps:
+1. SRE Agent portal → **Full setup** → **Azure resources** → `+`
+2. Fill in:
+
+| Field | Value |
+|---|---|
+| Scope | Resource Group `ai-obs-sre-demo` |
+| Auth | Managed Identity → `aiosre-sre-agent-demo-<suffix>` |
+
+3. Click **Test connection** — must pass (`Monitoring Reader` already granted in step 2)
+4. Click **Save**
+
+> **Skip Incidents** — requires ITSM integration (ServiceNow/Jira), not part of this demo.
+
+## 5. Connector: GitHub (Code)
+
+Allows the agent to correlate errors with source code, recent commits, and deployment changes.
+
+1. SRE Agent portal → **Full setup** → **Code** → `+` → **GitHub**
+2. Fill in:
+
+| Field | Value |
+|---|---|
+| Repository URL | `https://github.com/kunalchandratre1/ai-observability-sre-demo` |
+| PAT | Fine-grained PAT with `Contents: Read` + `Metadata: Read` |
+
+3. Click **Save**
+
+## 6. Knowledge Files
+
+Upload the fault scenario runbooks so the agent knows expected symptoms and remediation steps for each scenario.
+
+1. SRE Agent portal → **Full setup** → **Knowledge files** → `+`
+2. Upload all `.md` files from `docs/runbooks/`:
+   - `01-backend-api-fault.md`
+   - `02-apim-rate-limit.md`
+   - `03-cosmos-private-endpoint.md`
+   - `04-openai-down.md`
+   - `05-speech-down.md`
+   - `06-thirdparty-down.md`
+   - `07-cpu-saturation.md`
+   - `08-bad-deployment.md`
+3. Click **Done and go to agent**
+
+## 7. Kusto Tools
+
+Tools give the agent deterministic, parameterised KQL queries it can call during investigations.
+Upload each `.kql` file from `infra/sre-agent/kusto-tools/` via SRE Agent portal → **Tools** → **+ Add KQL tool**.
+
+| Tool name | ADX tables queried | What it answers |
+|---|---|---|
+| `QueryRecentAppErrors` | `AppLogs`, `AppExceptions` | Recent errors by service and severity |
+| `QueryDependencyErrors` | `AppSpans`, `AppExceptions` | Failures for a specific dependency (OpenAI / Speech / Cosmos / ThirdParty) |
+| `QueryLatencyPercentiles` | `AppSpans` | p50/p95/p99 latency per service |
+| `TraceDrilldown` | `AppSpans`, `AppLogs`, `AppExceptions` | Full trace timeline for a single `trace_id` |
+| `APIMvsBackendCorrelation` | `APIMGatewayLogs`, `AppExceptions`, `AppSpans` | Joins APIM 5xx to backend exceptions via `x-correlation-id` / `traceparent` |
+| `DeploymentCorrelation` | `AppLogs`, `AppSpans` | Error rate / latency shift correlated with `deployment_version` changes |
+
+For each tool, declare typed parameters matching the `declare query_parameters(...)` block at the top of each `.kql` file.
+
+## 8. System Prompt (Instructions)
+
+1. SRE Agent portal → **Instructions** tab
+2. Paste full contents of `infra/sre-agent/prompts/system-prompt.md`
+3. Click **Save**
+
+The system prompt tells the agent:
+- the 4-plane telemetry architecture (what data is where)
+- the ID taxonomy (`correlation_id` vs `trace_id` vs `request_id`)
+- which Kusto tools to call for each fault scenario
+- expected RCA output format (symptom → timeline → evidence chain → root cause → remediation)
+
+## 9. Smoke test
+
+Ask the agent: *“Show me the most recent application errors in the last 30 minutes.”*
+
+Expected behaviour:
+1. Agent calls `QueryRecentAppErrors(30m, "api-service")`
+2. Returns structured RCA with cited KQL and evidence from ADX
+3. References AKS CPU/memory context from Azure Monitor if relevant
+
+If the agent returns “no data found”, verify data is flowing:
+```powershell
+# Quick ADX row count check
+$t = az account get-access-token --resource 'https://aiosreadxdemo4lrdqw.australiaeast.kusto.windows.net' --query accessToken -o tsv
+$body = '{ "db": "observability", "csl": "AppLogs | count" }'
+$r = Invoke-WebRequest -Method POST -Uri 'https://aiosreadxdemo4lrdqw.australiaeast.kusto.windows.net/v1/rest/query' -Headers @{ Authorization = "Bearer $t"; 'x-ms-client-request-id' = 'smoke;1' } -ContentType 'application/json; charset=utf-8' -Body $body
+($r.Content | ConvertFrom-Json).Tables[0].Rows[0][0]
+```
