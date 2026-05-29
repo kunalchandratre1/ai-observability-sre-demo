@@ -26,5 +26,6 @@ output aksUamiPrincipalId string = aksUami.properties.principalId
 output aksUamiClientId string = aksUami.properties.clientId
 output apimUamiId string = apimUami.id
 output apimUamiPrincipalId string = apimUami.properties.principalId
+output apimUamiClientId string = apimUami.properties.clientId
 output sreAgentUamiId string = sreAgentUami.id
 output sreAgentUamiPrincipalId string = sreAgentUami.properties.principalId

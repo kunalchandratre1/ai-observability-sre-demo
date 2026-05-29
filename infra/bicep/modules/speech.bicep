@@ -2,6 +2,7 @@ param prefix string
 param env string
 param location string
 param aksUamiPrincipalId string
+param speechSku string
 param logAnalyticsWorkspaceId string
 param tags object
 
@@ -10,7 +11,7 @@ resource speech 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   location: location
   tags: tags
   kind: 'SpeechServices'
-  sku: { name: 'S0' }
+  sku: { name: speechSku }
   identity: { type: 'SystemAssigned' }
   properties: {
     customSubDomainName: '${prefix}-speech-${env}'

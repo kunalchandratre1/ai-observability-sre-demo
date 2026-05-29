@@ -3,13 +3,14 @@ param env string
 param location string
 param monitorWorkspaceId string
 param adxClusterUri string
+param grafanaSku string
 param tags object
 
 resource grafana 'Microsoft.Dashboard/grafana@2023-09-01' = {
   name: '${prefix}-grafana-${env}'
   location: location
   tags: tags
-  sku: { name: 'Standard' }
+  sku: { name: grafanaSku }
   identity: { type: 'SystemAssigned' }
   properties: {
     apiKey: 'Enabled'

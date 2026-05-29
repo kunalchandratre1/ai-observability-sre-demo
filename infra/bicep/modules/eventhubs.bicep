@@ -3,6 +3,7 @@ param env string
 param location string
 param aksUamiPrincipalId string
 param apimUamiPrincipalId string
+param namespaceSku string
 param tags object
 
 var nsName = '${prefix}-ehns-${env}-${uniqueString(resourceGroup().id)}'
@@ -11,10 +12,9 @@ resource ns 'Microsoft.EventHub/namespaces@2024-01-01' = {
   name: nsName
   location: location
   tags: tags
-  sku: { name: 'Standard', tier: 'Standard', capacity: 2 }
+  sku: { name: namespaceSku, tier: namespaceSku, capacity: 1 }
   properties: {
-    isAutoInflateEnabled: true
-    maximumThroughputUnits: 10
+    isAutoInflateEnabled: false
     kafkaEnabled: true
   }
 }

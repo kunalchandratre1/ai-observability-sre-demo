@@ -201,6 +201,24 @@ async def enqueue_voice_order(order_payload: dict, traceparent: Optional[str]) -
 
 # ----------------------- Cosmos (used by worker; included here for read-after-write demo) -----------------------
 
+async def cosmos_write_order(doc: dict) -> None:
+    """Write a document to the orders container. Used by fault injection to generate RU load."""
+    endpoint = settings.cosmos_endpoint
+    with tracer.start_as_current_span("dep.Cosmos.write") as span:
+        stamp_span_with_correlation(span)
+        started = time.perf_counter()
+        try:
+            credential = DefaultAzureCredential(managed_identity_client_id=settings.azure_client_id or None)
+            async with CosmosClient(endpoint, credential) as client:
+                db = client.get_database_client(settings.cosmos_database)
+                cont = db.get_container_client(settings.cosmos_container)
+                await cont.upsert_item(doc)
+                _record(span, "Cosmos", endpoint, 200, started)
+        except Exception as ex:  # noqa: BLE001
+            _record(span, "Cosmos", endpoint, None, started, ex)
+            raise
+
+
 async def cosmos_read_order(order_id: str, user_id: str) -> Optional[dict]:
     endpoint = settings.cosmos_endpoint
     if settings.fault_force_cosmos_dns_break:

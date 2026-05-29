@@ -1,15 +1,19 @@
 param prefix string
 param env string
 param location string
+param redisSku string
 param logAnalyticsWorkspaceId string
 param tags object
+
+var redisFamily = redisSku == 'Premium' ? 'P' : 'C'
+var redisCapacity = redisSku == 'Premium' ? 1 : 0
 
 resource redis 'Microsoft.Cache/Redis@2024-03-01' = {
   name: '${prefix}-redis-${env}-${uniqueString(resourceGroup().id)}'
   location: location
   tags: tags
   properties: {
-    sku: { name: 'Basic', family: 'C', capacity: 0 }
+    sku: { name: redisSku, family: redisFamily, capacity: redisCapacity }
     enableNonSslPort: false
     minimumTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'

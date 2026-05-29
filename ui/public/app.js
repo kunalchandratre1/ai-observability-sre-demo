@@ -12,13 +12,37 @@ document.querySelectorAll("button[data-copy]").forEach(b => {
   b.addEventListener("click", () => navigator.clipboard.writeText($(b.dataset.copy).textContent.trim()));
 });
 
+function createCorrelationId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return `cid-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+async function parseJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function normalizePayload(payload) {
+  if (payload && typeof payload.detail === "object" && payload.detail !== null) {
+    return payload.detail;
+  }
+  return payload;
+}
+
 async function callApim(path, opts = {}) {
   const url = `${$("apim-url").value.replace(/\/$/, "")}${path}`;
+  const correlationId = opts.headers?.["x-correlation-id"] || createCorrelationId();
   return fetch(url, {
     ...opts,
     headers: {
       "Ocp-Apim-Subscription-Key": $("apim-key").value,
       "Content-Type": "application/json",
+      "x-correlation-id": correlationId,
       ...(opts.headers || {}),
     },
   });
@@ -54,16 +78,23 @@ function buildLinks(traceId, correlationId) {
   $("link-trace").href = `${base}/explore?left=${encodeURIComponent(JSON.stringify({datasource:"ADX",queries:[{kql:`AppSpans | where TraceId == "${traceId}" | order by Timestamp asc`}]}))}`;
 }
 
-$("btn-submit").addEventListener("click", async () => {
+async function submitOrder() {
   try {
     const r = await callApim("/voice/orders", { method:"POST", body: JSON.stringify({ text:$("order-text").value, user_id:$("user-id").value })});
-    const j = await r.json();
+    const j = normalizePayload(await parseJsonResponse(r));
     setIds(j, r.headers);
+    if (!r.ok) {
+      $("raw").textContent = JSON.stringify({ status: r.status, ...j }, null, 2);
+    }
   } catch (e) { $("raw").textContent = String(e); }
-});
+}
+
+$("btn-submit").addEventListener("click", submitOrder);
 
 $("btn-burst").addEventListener("click", async () => {
-  for (let i=0;i<10;i++) await $("btn-submit").click?.() || $("btn-submit").dispatchEvent(new Event("click"));
+  for (let i = 0; i < 10; i += 1) {
+    await submitOrder();
+  }
 });
 
 document.querySelectorAll(".faults button").forEach(b => {

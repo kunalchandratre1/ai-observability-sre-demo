@@ -3,7 +3,7 @@
 set -euo pipefail
 : "${SUBSCRIPTION_ID:?Set SUBSCRIPTION_ID}"
 : "${RG:=ai-obs-sre-demo}"
-: "${LOCATION:=eastus}"
+: "${LOCATION:=australiaeast}"
 
 az account set --subscription "$SUBSCRIPTION_ID"
 az group create -n "$RG" -l "$LOCATION" -o none

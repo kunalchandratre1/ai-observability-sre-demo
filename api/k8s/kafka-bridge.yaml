@@ -1,0 +1,156 @@
+---
+# ServiceAccount for kafka-bridge — annotated for Workload Identity so the pod
+# can obtain Azure AD tokens without any SAS key secret.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bridge-sa
+  namespace: observability
+  annotations:
+    azure.workload.identity/client-id: "REPLACE_WITH_AKS_UAMI_CLIENT_ID"
+---
+# kafka-bridge: receives OTLP/HTTP (JSON) from otelcol and forwards to Azure
+# Event Hub using azure-eventhub AMQP SDK with Managed Identity (Workload Identity).
+# No SAS keys required.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-bridge-script
+  namespace: observability
+data:
+  bridge.py: |
+    #!/usr/bin/env python3
+    import os, sys, threading
+    from flask import Flask, request, Response
+    from azure.eventhub import EventHubProducerClient, EventData
+    from azure.identity import DefaultAzureCredential
+
+    NAMESPACE = os.environ['EVENTHUB_NAMESPACE']  # injected by Deployment env var
+    TOPIC     = 'aks-otel'
+
+    print('kafka-bridge: connecting via Managed Identity ...', flush=True)
+    try:
+        credential = DefaultAzureCredential()
+        producer = EventHubProducerClient(
+            fully_qualified_namespace=NAMESPACE,
+            eventhub_name=TOPIC,
+            credential=credential,
+        )
+        # Warm-up: validates the credential and pre-establishes the AMQP link
+        batch = producer.create_batch()
+        batch.add(EventData(b'{"_bridge":"startup"}'))
+        producer.send_batch(batch)
+        print('kafka-bridge: connected and warm!', flush=True)
+    except Exception as exc:
+        print(f'kafka-bridge FATAL: {exc}', file=sys.stderr, flush=True)
+        sys.exit(1)
+
+    _lock = threading.Lock()
+    app = Flask(__name__)
+
+    def _send(data: bytes):
+        with _lock:
+            batch = producer.create_batch()
+            batch.add(EventData(data))
+            producer.send_batch(batch)
+
+    @app.route('/v1/logs', methods=['POST'])
+    def logs():
+        _send(request.data)
+        return Response('{}', content_type='application/json')
+
+    @app.route('/v1/traces', methods=['POST'])
+    def traces():
+        _send(request.data)
+        return Response('{}', content_type='application/json')
+
+    @app.route('/v1/metrics', methods=['POST'])
+    def metrics():
+        _send(request.data)
+        return Response('{}', content_type='application/json')
+
+    @app.route('/health')
+    def health():
+        return Response('ok', content_type='text/plain')
+
+    if __name__ == '__main__':
+        print('kafka-bridge: listening on :4319', flush=True)
+        app.run(host='0.0.0.0', port=4319, threaded=True)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-bridge
+  namespace: observability
+  labels: { app: kafka-bridge }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kafka-bridge } }
+  template:
+    metadata:
+      labels:
+        app: kafka-bridge
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: bridge-sa
+      initContainers:
+        - name: pip-install
+          image: python:3.12-slim
+          command:
+            - pip
+            - install
+            - -q
+            - flask
+            - azure-eventhub
+            - azure-identity
+            - --target=/packages
+          volumeMounts:
+            - name: packages
+              mountPath: /packages
+      containers:
+        - name: bridge
+          image: python:3.12-slim
+          command:
+            - python
+            - /app/bridge.py
+          env:
+            - name: PYTHONPATH
+              value: /packages
+            - name: EVENTHUB_NAMESPACE
+              value: "REPLACE_EHNS.servicebus.windows.net"
+          ports:
+            - containerPort: 4319
+          volumeMounts:
+            - name: script
+              mountPath: /app
+            - name: packages
+              mountPath: /packages
+          livenessProbe:
+            httpGet: { path: /health, port: 4319 }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health, port: 4319 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 250m, memory: 256Mi }
+      volumes:
+        - name: script
+          configMap: { name: kafka-bridge-script }
+        - name: packages
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-bridge
+  namespace: observability
+spec:
+  selector: { app: kafka-bridge }
+  ports:
+    - port: 4319
+      targetPort: 4319

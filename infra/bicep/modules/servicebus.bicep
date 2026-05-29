@@ -2,6 +2,7 @@ param prefix string
 param env string
 param location string
 param aksUamiPrincipalId string
+param namespaceSku string
 param logAnalyticsWorkspaceId string
 param tags object
 
@@ -11,7 +12,10 @@ resource ns 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   name: nsName
   location: location
   tags: tags
-  sku: { name: 'Standard', tier: 'Standard' }
+  sku: { name: namespaceSku, tier: namespaceSku }
+  properties: {
+    zoneRedundant: false
+  }
 }
 
 resource queue 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {

@@ -4,9 +4,12 @@
   "parameters": {
     "prefix":             { "value": "aiosre" },
     "env":                { "value": "demo" },
-    "location":           { "value": "eastus" },
+    "location":           { "value": "australiaeast" },
     "deployerObjectId":   { "value": "<replace-with-az-ad-signed-in-user-object-id>" },
     "aksNodeCount":       { "value": 2 },
+    "aksSystemNodeSku":   { "value": "Standard_B2s" },
+    "aksNodeSku":         { "value": "Standard_B2s" },
+    "firewallSku":        { "value": "Basic" },
     "apimSku":            { "value": "Developer" },
     "apimPublisherEmail": { "value": "sre-demo@example.com" },
     "apimPublisherName":  { "value": "SRE Demo" },

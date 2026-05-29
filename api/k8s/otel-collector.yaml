@@ -14,38 +14,25 @@ data:
       batch: { timeout: 5s, send_batch_size: 512 }
       resourcedetection: { detectors: [env, system, k8snode] }
     exporters:
-      kafka/logs:
-        brokers: ["${env:EVENTHUB_NAMESPACE_BOOTSTRAP}"]
-        topic: aks-otel
-        encoding: otlp_json
-        protocol_version: 2.0.0
-        auth:
-          sasl: { mechanism: PLAIN, username: "$ConnectionString", password: "${env:EVENTHUB_CONNSTR_LOGS}" }
-          tls:  { insecure: false }
-      kafka/traces:
-        brokers: ["${env:EVENTHUB_NAMESPACE_BOOTSTRAP}"]
-        topic: aks-otel
-        encoding: otlp_json
-        protocol_version: 2.0.0
-        auth:
-          sasl: { mechanism: PLAIN, username: "$ConnectionString", password: "${env:EVENTHUB_CONNSTR_LOGS}" }
-          tls:  { insecure: false }
+      # kafka-bridge is a Python sidecar that receives OTLP/HTTP JSON and
+      # forwards to Azure Event Hub using kafka-python (which sends ApiVersionsRequest
+      # before SASL, unlike Sarama which causes a connection reset from EH).
+      otlphttp/bridge:
+        endpoint: http://kafka-bridge:4319
+        encoding: json
+        tls:
+          insecure: true
+        timeout: 15s
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 120s
       debug: { verbosity: basic }
     service:
       pipelines:
-        logs:    { receivers: [otlp], processors: [batch, resourcedetection], exporters: [kafka/logs] }
-        traces:  { receivers: [otlp], processors: [batch, resourcedetection], exporters: [kafka/traces] }
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: otel-collector-secret
-  namespace: observability
-type: Opaque
-stringData:
-  EVENTHUB_NAMESPACE_BOOTSTRAP: "REPLACE_EHNS.servicebus.windows.net:9093"
-  # Connection string with SendOnly auth for the `aks-otel` hub. Created by 30-deploy-aks.sh.
-  EVENTHUB_CONNSTR_LOGS: "REPLACE_EH_CONNSTR"
+        logs:    { receivers: [otlp], processors: [batch, resourcedetection], exporters: [otlphttp/bridge] }
+        traces:  { receivers: [otlp], processors: [batch, resourcedetection], exporters: [otlphttp/bridge] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -61,11 +48,15 @@ spec:
     spec:
       containers:
         - name: collector
-          image: otel/opentelemetry-collector-contrib:0.108.0
+          image: otel/opentelemetry-collector-contrib:0.127.0
           args: ["--config=/conf/collector.yaml"]
-          envFrom: [{ secretRef: { name: otel-collector-secret } }]
           env:
             - { name: K8S_CLUSTER_NAME, value: "REPLACE_AKS_NAME" }
+            # Required by the k8snode resource detector to identify the node the collector runs on.
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           ports:
             - { containerPort: 4317, name: otlp-grpc }
             - { containerPort: 4318, name: otlp-http }

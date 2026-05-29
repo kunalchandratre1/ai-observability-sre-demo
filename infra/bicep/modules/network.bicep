@@ -4,27 +4,134 @@ param location string
 param vnetAddressSpace string
 param onPremVnetAddressSpace string
 param vpnGatewayEnabled bool
+param firewallSku string
 param tags object
 
 var hubName = '${prefix}-vnet-${env}'
 var onPremVnetName = '${prefix}-onprem-vnet-${env}'
 var fwName = '${prefix}-fw-${env}'
 var fwPipName = '${prefix}-fw-pip-${env}'
+var fwMgmtPipName = '${prefix}-fw-mgmt-pip-${env}'
+var fwPolicyName = '${prefix}-fw-policy-${env}'
 var vpnPipName = '${prefix}-vpn-pip-${env}'
 var vpnGwName = '${prefix}-vpn-gw-${env}'
+
+// NSG required by APIM when deployed into a VNet subnet
+resource apimNsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
+  name: '${prefix}-nsg-apim-${env}'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: [
+      {
+        name: 'Allow-APIM-Management'
+        properties: {
+          priority: 100
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Inbound'
+          sourceAddressPrefix: 'ApiManagement'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '3443'
+        }
+      }
+      {
+        name: 'Allow-HTTPS-Inbound'
+        properties: {
+          priority: 110
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Inbound'
+          sourceAddressPrefix: 'Internet'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '443'
+        }
+      }
+      {
+        name: 'Allow-AzureLoadBalancer'
+        properties: {
+          priority: 120
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Inbound'
+          sourceAddressPrefix: 'AzureLoadBalancer'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '6390'
+        }
+      }
+      {
+        name: 'Allow-Storage-Outbound'
+        properties: {
+          priority: 100
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'Storage'
+          destinationPortRange: '443'
+        }
+      }
+      {
+        name: 'Allow-SQL-Outbound'
+        properties: {
+          priority: 110
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'Sql'
+          destinationPortRange: '1433'
+        }
+      }
+      {
+        name: 'Allow-KeyVault-Outbound'
+        properties: {
+          priority: 120
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'AzureKeyVault'
+          destinationPortRange: '443'
+        }
+      }
+      {
+        name: 'Allow-EventHub-Outbound'
+        properties: {
+          priority: 130
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'EventHub'
+          destinationPortRange: '5671'
+        }
+      }
+    ]
+  }
+}
 
 resource hub 'Microsoft.Network/virtualNetworks@2023-11-01' = {
   name: hubName
   location: location
   tags: tags
+  dependsOn: [ apimNsg ]
   properties: {
     addressSpace: { addressPrefixes: [ vnetAddressSpace ] }
     subnets: [
       { name: 'snet-aks',     properties: { addressPrefix: cidrSubnet(vnetAddressSpace, 22, 0) } }
       { name: 'snet-pe',      properties: { addressPrefix: cidrSubnet(vnetAddressSpace, 24, 4), privateEndpointNetworkPolicies: 'Disabled' } }
-      { name: 'snet-apim',    properties: { addressPrefix: cidrSubnet(vnetAddressSpace, 24, 5) } }
-      { name: 'AzureFirewallSubnet', properties: { addressPrefix: cidrSubnet(vnetAddressSpace, 26, 24) } }
-      { name: 'GatewaySubnet', properties: { addressPrefix: cidrSubnet(vnetAddressSpace, 27, 50) } }
+      { name: 'snet-apim',    properties: { addressPrefix: cidrSubnet(vnetAddressSpace, 24, 5), networkSecurityGroup: { id: apimNsg.id } } }
+      { name: 'AzureFirewallSubnet',           properties: { addressPrefix: cidrSubnet(vnetAddressSpace, 26, 24) } }
+      { name: 'AzureFirewallManagementSubnet',  properties: { addressPrefix: cidrSubnet(vnetAddressSpace, 26, 26) } }
+      { name: 'GatewaySubnet',                  properties: { addressPrefix: cidrSubnet(vnetAddressSpace, 27, 50) } }
     ]
   }
 }
@@ -66,12 +173,30 @@ resource fwPip 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
   properties: { publicIPAllocationMethod: 'Static' }
 }
 
+resource fwMgmtPip 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
+  name: fwMgmtPipName
+  location: location
+  sku: { name: 'Standard' }
+  properties: { publicIPAllocationMethod: 'Static' }
+}
+
+// Basic tier requires a Firewall Policy (classic rules not supported)
+resource fwPolicy 'Microsoft.Network/firewallPolicies@2023-11-01' = {
+  name: fwPolicyName
+  location: location
+  tags: tags
+  properties: {
+    sku: { tier: firewallSku }
+  }
+}
+
 resource fw 'Microsoft.Network/azureFirewalls@2023-11-01' = {
   name: fwName
   location: location
   tags: tags
   properties: {
-    sku: { name: 'AZFW_VNet', tier: 'Standard' }
+    sku: { name: 'AZFW_VNet', tier: firewallSku }
+    firewallPolicy: { id: fwPolicy.id }
     ipConfigurations: [
       {
         name: 'fwipconf'
@@ -81,6 +206,13 @@ resource fw 'Microsoft.Network/azureFirewalls@2023-11-01' = {
         }
       }
     ]
+    managementIpConfiguration: {
+      name: 'fwmgmtipconf'
+      properties: {
+        subnet: { id: '${hub.id}/subnets/AzureFirewallManagementSubnet' }
+        publicIPAddress: { id: fwMgmtPip.id }
+      }
+    }
   }
 }
 
@@ -130,6 +262,7 @@ resource zones 'Microsoft.Network/privateDnsZones@2020-06-01' = [for z in dnsZon
 
 resource zoneLinks 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = [for (z, i) in dnsZones: {
   name: '${zones[i].name}/link-hub'
+  location: 'global'
   properties: {
     registrationEnabled: false
     virtualNetwork: { id: hub.id }

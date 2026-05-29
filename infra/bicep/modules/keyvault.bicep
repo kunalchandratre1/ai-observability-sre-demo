@@ -20,6 +20,7 @@ resource kv 'Microsoft.KeyVault/vaults@2023-07-01' = {
     tenantId: subscription().tenantId
     enableRbacAuthorization: true
     enableSoftDelete: true
+    softDeleteRetentionInDays: 7   // minimum; allows purge sooner during demo rebuilds
     publicNetworkAccess: 'Enabled' // demo simplicity; production should use private only
     networkAcls: { defaultAction: 'Allow', bypass: 'AzureServices' }
   }

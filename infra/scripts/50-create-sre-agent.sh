@@ -3,7 +3,7 @@
 # NOTE: Azure SRE Agent is in preview and provisioned via portal/CLI extension.
 # This script orchestrates the supported commands; some steps are documented as portal actions.
 set -euo pipefail
-: "${RG:?}"; : "${LOCATION:=eastus}"
+: "${RG:?}"; : "${LOCATION:=australiaeast}"
 : "${SRE_AGENT_NAME:=aiosre-sre-agent-demo}"
 : "${ADX_CLUSTER_URI:?}"; : "${ADX_DB:=observability}"
 : "${SRE_UAMI:?SRE Agent UAMI name (kept under same RG)}"

@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential libssl-dev ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Ensure pip and setuptools are up-to-date before installing dependencies
+RUN pip install --upgrade pip setuptools
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 

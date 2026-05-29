@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     fault_force_cosmos_dns_break: bool = False
     fault_extra_cpu_burn_ms: int = 0
     fault_force_exception: bool = False
+    # Fires 20 parallel Cosmos writes per request to exhaust 400 RU budget → 429s
+    fault_cosmos_throttle: bool = False
 
 
 settings = Settings()

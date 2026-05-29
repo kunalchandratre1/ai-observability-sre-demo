@@ -14,6 +14,7 @@ class FaultState(BaseModel):
     fault_force_cosmos_dns_break: bool | None = None
     fault_extra_cpu_burn_ms: int | None = None
     fault_force_exception: bool | None = None
+    fault_cosmos_throttle: bool | None = None
 
 
 @router.get("/faults")
@@ -25,6 +26,7 @@ def get_faults():
         "fault_force_cosmos_dns_break": settings.fault_force_cosmos_dns_break,
         "fault_extra_cpu_burn_ms": settings.fault_extra_cpu_burn_ms,
         "fault_force_exception": settings.fault_force_exception,
+        "fault_cosmos_throttle": settings.fault_cosmos_throttle,
         "deployment_version": settings.deployment_version,
         "pod": settings.pod_name,
     }

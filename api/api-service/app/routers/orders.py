@@ -59,6 +59,23 @@ async def submit_order(payload: VoiceOrderRequest, request: Request):
         log.error("synthetic.unhandled_exception", extra={"order_id": order_id})
         raise RuntimeError("synthetic unhandled exception (fault_force_exception=true)")
 
+    # Fault: Cosmos RU throttle — fire 20 parallel dummy writes to exhaust the 400 RU/s budget
+    # This causes subsequent real writes in the same second to get 429 TooManyRequests from Cosmos.
+    if settings.fault_cosmos_throttle:
+        import asyncio
+        async def _dummy_write(i: int):
+            try:
+                await deps.cosmos_write_order({
+                    "id": f"throttle-{order_id}-{i}",
+                    "order_id": f"throttle-{order_id}-{i}",
+                    "user_id": payload.user_id,
+                    "_ttl": 10,
+                })
+            except Exception:
+                pass
+        await asyncio.gather(*[_dummy_write(i) for i in range(20)], return_exceptions=True)
+        log.warning("fault.cosmos_throttle.burst_fired", extra={"order_id": order_id, "burst_writes": 20})
+
     deps_outcome: dict[str, dict[str, Any]] = {}
 
     # Extract traceparent for downstream propagation

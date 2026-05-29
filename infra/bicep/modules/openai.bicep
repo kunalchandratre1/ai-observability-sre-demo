@@ -3,8 +3,8 @@ param env string
 param location string
 param aksUamiPrincipalId string
 param logAnalyticsWorkspaceId string
+param openAiSku string
 param chatDeploymentName string
-param sttDeploymentName string
 param tags object
 
 resource oai 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
@@ -12,7 +12,7 @@ resource oai 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   location: location
   tags: tags
   kind: 'OpenAI'
-  sku: { name: 'S0' }
+  sku: { name: openAiSku }
   identity: { type: 'SystemAssigned' }
   properties: {
     customSubDomainName: '${prefix}-openai-${env}'
@@ -27,16 +27,6 @@ resource chatDeploy 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01
   properties: {
     model: { format: 'OpenAI', name: 'gpt-4o-mini', version: '2024-07-18' }
   }
-}
-
-resource sttDeploy 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
-  name: sttDeploymentName
-  parent: oai
-  sku: { name: 'Standard', capacity: 1 }
-  properties: {
-    model: { format: 'OpenAI', name: 'whisper', version: '001' }
-  }
-  dependsOn: [ chatDeploy ]
 }
 
 var roleCogUser = 'a97b65f3-24c7-4388-baec-2e87135dc908'
@@ -63,5 +53,4 @@ resource diag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
 output id string = oai.id
 output endpoint string = oai.properties.endpoint
 output chatDeployment string = chatDeploy.name
-output sttDeployment string = sttDeploy.name
 output name string = oai.name

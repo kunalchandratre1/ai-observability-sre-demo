@@ -1,6 +1,7 @@
 param prefix string
 param env string
 param location string
+param logAnalyticsSku string
 param tags object
 
 resource la 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
@@ -8,7 +9,7 @@ resource la 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   location: location
   tags: tags
   properties: {
-    sku: { name: 'PerGB2018' }
+    sku: { name: logAnalyticsSku }
     retentionInDays: 30
     features: { enableLogAccessUsingOnlyResourcePermissions: true }
   }

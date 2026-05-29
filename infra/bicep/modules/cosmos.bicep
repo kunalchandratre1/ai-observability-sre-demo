@@ -4,6 +4,7 @@ param location string
 param privateEndpointSubnetId string
 param privateDnsZoneIdCosmos string
 param aksUamiPrincipalId string
+param consistencyLevel string
 param logAnalyticsWorkspaceId string
 param tags object
 
@@ -16,8 +17,8 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   kind: 'GlobalDocumentDB'
   properties: {
     databaseAccountOfferType: 'Standard'
-    consistencyPolicy: { defaultConsistencyLevel: 'Session' }
-    locations: [ { locationName: location, failoverPriority: 0 } ]
+    consistencyPolicy: { defaultConsistencyLevel: consistencyLevel }
+    locations: [ { locationName: location, failoverPriority: 0, isZoneRedundant: false } ]
     publicNetworkAccess: 'Disabled'
     enableAutomaticFailover: false
     capabilities: []
@@ -40,6 +41,7 @@ resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
     resource: {
       id: 'voice-orders'
       partitionKey: { paths: [ '/user_id' ], kind: 'Hash' }
+      defaultTtl: -1  // TTL enabled (per-doc opt-in); throttle dummy docs set _ttl=10s
       indexingPolicy: { indexingMode: 'consistent', automatic: true, includedPaths: [ { path: '/*' } ] }
     }
   }

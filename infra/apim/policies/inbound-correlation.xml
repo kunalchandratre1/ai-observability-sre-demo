@@ -30,6 +30,13 @@
         </set-header>
       </when>
     </choose>
+    <choose>
+      <when condition="@(context.Request.Headers.ContainsKey(&quot;tracestate&quot;))">
+        <set-header name="tracestate" exists-action="skip">
+          <value>@(context.Request.Headers.GetValueOrDefault(&quot;tracestate&quot;,&quot;&quot;))</value>
+        </set-header>
+      </when>
+    </choose>
 
     <!-- 4. Subscription key required (placeholder auth) -->
     <check-header name="Ocp-Apim-Subscription-Key" failed-check-httpcode="401" failed-check-error-message="Missing subscription key" ignore-case="true" />

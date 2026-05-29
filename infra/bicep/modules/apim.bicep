@@ -6,6 +6,7 @@ param publisherEmail string
 param publisherName string
 param apimSubnetId string
 param apimUamiId string
+param apimUamiClientId string
 param eventHubNamespaceName string
 param apimDiagHubName string
 param logAnalyticsWorkspaceId string
@@ -38,7 +39,7 @@ resource ehLogger 'Microsoft.ApiManagement/service/loggers@2023-09-01-preview' =
     description: 'APIM diagnostics -> Event Hub -> ADX'
     credentials: {
       endpointAddress: '${eventHubNamespaceName}.servicebus.windows.net'
-      identityClientId: ''
+      identityClientId: apimUamiClientId
       name: apimDiagHubName
     }
   }

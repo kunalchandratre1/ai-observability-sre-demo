@@ -40,7 +40,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
         sku: '22_04-lts-gen2'
         version: 'latest'
       }
-      osDisk: { createOption: 'FromImage', managedDisk: { storageAccountType: 'StandardSSD_LRS' } }
+      osDisk: { createOption: 'FromImage', managedDisk: { storageAccountType: 'Standard_LRS' } }
     }
     networkProfile: { networkInterfaces: [ { id: nic.id } ] }
   }
