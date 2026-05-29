@@ -109,7 +109,7 @@ Write-Host "     Provider registration triggered (may take a few minutes to prop
 
 # ── 2. Resolve SRE UAMI ────────────────────────────────────────────────────────
 Write-Host "`n[2/7] Resolving SRE Agent UAMI..."
-$uamis = az identity list -g $ResourceGroup -o json 2>&1 | ConvertFrom-Json
+$uamis = az identity list -g $ResourceGroup -o json 2>$null | ConvertFrom-Json
 $sreUami = $uamis | Where-Object { $_.name -like '*sre-uami*' } | Select-Object -First 1
 if (-not $sreUami) {
     Write-Error "SRE UAMI not found in $ResourceGroup. Ensure Bicep (identity.bicep) has been deployed."
@@ -130,7 +130,7 @@ $monReaderRoleId    = '43d0d8ad-25c7-4714-9337-8ba259a9fe05'
 
 foreach ($roleId in @($readerRoleId, $monReaderRoleId)) {
     $roleName = if ($roleId -eq $readerRoleId) { 'Reader' } else { 'Monitoring Reader' }
-    $existing = az role assignment list --assignee $sreUamiPrincipalId --role $roleId --scope $rgId -o json 2>&1 | ConvertFrom-Json
+    $existing = az role assignment list --assignee $sreUamiPrincipalId --role $roleId --scope $rgId -o json 2>$null | ConvertFrom-Json
     if ($existing.Count -eq 0) {
         az role assignment create --assignee-object-id $sreUamiPrincipalId --assignee-principal-type ServicePrincipal `
             --role $roleId --scope $rgId -o none 2>&1
@@ -143,7 +143,7 @@ foreach ($roleId in @($readerRoleId, $monReaderRoleId)) {
 # ── 3. Resolve ADX ────────────────────────────────────────────────────────────
 Write-Host "`n[3/7] Resolving ADX cluster..."
 if (-not $AdxClusterName) {
-    $adxClusters = az kusto cluster list -g $ResourceGroup -o json 2>&1 | ConvertFrom-Json
+    $adxClusters = az kusto cluster list -g $ResourceGroup -o json 2>$null | ConvertFrom-Json
     $AdxClusterName = ($adxClusters | Select-Object -First 1).name
 }
 $adxUri = "https://$AdxClusterName.$Location.kusto.windows.net"
@@ -238,7 +238,7 @@ $amScope = if ($MonitorScope -eq 'subscription') {
     "/subscriptions/$Subscription/resourceGroups/$ResourceGroup"
 }
 Write-Host "     Azure Monitor scope: $amScope"
-$amwList = az resource list -g $ResourceGroup --resource-type 'Microsoft.Monitor/accounts' -o json 2>&1 | ConvertFrom-Json
+$amwList = az resource list -g $ResourceGroup --resource-type 'Microsoft.Monitor/accounts' -o json 2>$null | ConvertFrom-Json
 $amwId   = ($amwList | Select-Object -First 1).id
 $amConnectorUrl = "$subPrefix/resourceGroups/$ResourceGroup/providers/Microsoft.SiteReliabilityEngineering/sreAgents/$AgentName/connectors/azure-monitor?api-version=2024-10-01-preview"
 $amConnectorBody = @{

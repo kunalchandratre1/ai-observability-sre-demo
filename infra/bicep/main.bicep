@@ -326,32 +326,3 @@ resource sreMonitoringReader 'Microsoft.Authorization/roleAssignments@2022-04-01
     principalType: 'ServicePrincipal'
   }
 }
-
-// AKS UAMI: Network Contributor on RG — required so the cloud-controller-manager can create
-// internal Azure Load Balancers for LoadBalancer-type services (e.g. nginx-ingress-controller)
-var networkContributorRoleId = '4d97b98b-1d4f-4787-a291-c67834d212e7'
-resource aksNetworkContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, 'aks-uami', networkContributorRoleId)
-  scope: resourceGroup()
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', networkContributorRoleId)
-    principalId: identity.outputs.aksUamiPrincipalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// AKS kubelet identity: AcrPull on ACR — the kubelet (node) identity pulls images from ACR.
-// This is SEPARATE from the workload/pod UAMI; without it pods get 401 ImagePullBackOff.
-var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
-resource acrExisting 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
-  name: acr.outputs.acrName
-}
-resource aksKubeletAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acr.outputs.acrId, 'aks-kubelet', acrPullRoleId)
-  scope: acrExisting
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
-    principalId: aks.outputs.kubeletPrincipalId
-    principalType: 'ServicePrincipal'
-  }
-}

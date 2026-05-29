@@ -64,8 +64,5 @@ resource aks 'Microsoft.ContainerService/managedClusters@2024-09-01' = {
 output aksId string = aks.id
 output aksName string = aks.name
 output oidcIssuerUrl string = aks.properties.oidcIssuerProfile.issuerURL
-// Kubelet identity — the node-level managed identity used by each node to pull images from ACR.
-// This is auto-created by AKS (separate from the workload/pod UAMI) and must have AcrPull on the registry.
-output kubeletPrincipalId string = any(aks.properties.identityProfile)['kubeletidentity'].objectId
 // Internal LB FQDN is created by the ingress controller post-deploy. Placeholder used in APIM module for backend URL; updated by 30-deploy-aks.sh via APIM backend update.
 output internalIngressFqdnPlaceholder string = '${prefix}-ingress.internal.local'

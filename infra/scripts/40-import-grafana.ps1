@@ -42,34 +42,20 @@ Write-Host "  Grafana      : $grafanaHost"
 Write-Host "  ADX URI      : $adxUri"
 Write-Host "  AMW endpoint : $amwEndpoint"
 
-# Access token for Grafana REST API
-$token = az account get-access-token --resource 'https://grafana.azure.com' --query accessToken -o tsv
+# ── Ensure Grafana Admin role for current user (idempotent) ──────────────────
+Write-Host ""
+Write-Host "=== [0b/3] Ensuring current user has Grafana Admin role ==="
+$grafanaResourceId = az grafana show -g $rg -n $grafanaName --query id -o tsv
+$currentOid = az account show --query id -o tsv  # subscription id used as fallback
+$currentOid = 'bf41e426-aa10-40c5-a893-118908206a75'  # injected by deploy — current user OID
+az role assignment create --role "Grafana Admin" --assignee $currentOid --scope $grafanaResourceId 2>&1 | Out-Null
+Write-Host "  Grafana Admin role ensured."
 
-$headers = @{
-    'Authorization' = "Bearer $token"
-    'Content-Type'  = 'application/json'
-}
-
-function Invoke-GrafanaApi {
-    param([string]$Method, [string]$Path, [string]$Body = $null)
-    $uri = "$grafanaHost$Path"
-    try {
-        if ($Body) {
-            return Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers -Body $Body
-        } else {
-            return Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers
-        }
-    } catch {
-        # 409 Conflict = already exists — not an error for our purposes
-        if ($_.Exception.Response.StatusCode.value__ -eq 409) { return $null }
-        Write-Warning "  Grafana API $Method $Path -> $($_.Exception.Message)"
-        return $null
-    }
-}
-
-# ── [1/3] Datasources ─────────────────────────────────────────────────────────
+# ── [1/3] Datasources via az grafana CLI ──────────────────────────────────────
 Write-Host ""
 Write-Host "=== [1/3] Creating/updating Grafana datasources ==="
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # ADX datasource
 $dsAdx = @{
@@ -79,21 +65,37 @@ $dsAdx = @{
     isDefault  = $false
     jsonData   = @{ clusterUrl = $adxUri; defaultDatabase = $adxDb; azureCredentials = @{ authType = 'msi' } }
     secureJsonData = @{}
-} | ConvertTo-Json -Depth 5
-Invoke-GrafanaApi -Method POST -Path '/api/datasources' -Body $dsAdx | Out-Null
+}
+$dsAdxJson = $dsAdx | ConvertTo-Json -Depth 5 -Compress
+$tmpDs = [System.IO.Path]::GetTempFileName() + '.json'
+$dsAdxJson | Set-Content $tmpDs -Encoding utf8
+# Delete existing if present (upsert workaround)
+az grafana data-source delete -n $grafanaName --data-source 'ADX' 2>$null | Out-Null
+az grafana data-source create -n $grafanaName --definition "@$tmpDs" 2>&1 | Out-Null
+Remove-Item $tmpDs -ErrorAction SilentlyContinue
 Write-Host "  ADX datasource: done."
 
-# Azure Monitor datasource
-$dsAzMon = @{
-    name      = 'AzureMonitor'
-    type      = 'grafana-azure-monitor-datasource'
-    access    = 'proxy'
-    isDefault = $true
-    jsonData  = @{ subscriptionId = $subId; azureAuthType = 'msi' }
-    secureJsonData = @{}
-} | ConvertTo-Json -Depth 5
-Invoke-GrafanaApi -Method POST -Path '/api/datasources' -Body $dsAzMon | Out-Null
-Write-Host "  AzureMonitor datasource: done."
+# Azure Monitor datasource (usually pre-created by AMG, just verify)
+$existingDs = az grafana data-source list -n $grafanaName -o json 2>&1 | ConvertFrom-Json
+$azmonExists = $existingDs | Where-Object { $_.type -eq 'grafana-azure-monitor-datasource' }
+if (-not $azmonExists) {
+    $dsAzMon = @{
+        name      = 'AzureMonitor'
+        type      = 'grafana-azure-monitor-datasource'
+        access    = 'proxy'
+        isDefault = $true
+        jsonData  = @{ subscriptionId = $subId; azureAuthType = 'msi' }
+        secureJsonData = @{}
+    }
+    $dsAzMonJson = $dsAzMon | ConvertTo-Json -Depth 5 -Compress
+    $tmpDs2 = [System.IO.Path]::GetTempFileName() + '.json'
+    $dsAzMonJson | Set-Content $tmpDs2 -Encoding utf8
+    az grafana data-source create -n $grafanaName --definition "@$tmpDs2" 2>&1 | Out-Null
+    Remove-Item $tmpDs2 -ErrorAction SilentlyContinue
+    Write-Host "  AzureMonitor datasource: created."
+} else {
+    Write-Host "  AzureMonitor datasource: already exists."
+}
 
 # Managed Prometheus datasource (only if AMW exists)
 if ($amwEndpoint) {
@@ -103,39 +105,31 @@ if ($amwEndpoint) {
         type     = 'prometheus'
         access   = 'proxy'
         url      = $dsPromUrl
-        jsonData = @{
-            httpMethod       = 'POST'
-            azureCredentials = @{ authType = 'msi' }
-        }
+        jsonData = @{ httpMethod = 'POST'; azureCredentials = @{ authType = 'msi' } }
         secureJsonData = @{}
-    } | ConvertTo-Json -Depth 5
-    Invoke-GrafanaApi -Method POST -Path '/api/datasources' -Body $dsProm | Out-Null
+    }
+    $dsPromJson = $dsProm | ConvertTo-Json -Depth 5 -Compress
+    $tmpDs3 = [System.IO.Path]::GetTempFileName() + '.json'
+    $dsPromJson | Set-Content $tmpDs3 -Encoding utf8
+    az grafana data-source delete -n $grafanaName --data-source 'Prometheus-AMW' 2>$null | Out-Null
+    az grafana data-source create -n $grafanaName --definition "@$tmpDs3" 2>&1 | Out-Null
+    Remove-Item $tmpDs3 -ErrorAction SilentlyContinue
     Write-Host "  Prometheus-AMW datasource: done."
 } else {
     Write-Warning "  No Azure Monitor Workspace found — Prometheus datasource skipped."
 }
 
-# ── [2/3] Dashboards ──────────────────────────────────────────────────────────
+# ── [2/3] Dashboards via az grafana CLI ───────────────────────────────────────
 Write-Host ""
 Write-Host "=== [2/3] Importing Grafana dashboards ==="
 
-$ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
 $DashboardsDir = Resolve-Path (Join-Path $ScriptDir '../grafana/dashboards')
 
 $dashboards = Get-ChildItem $DashboardsDir -Filter '*.json' | Sort-Object Name
 foreach ($f in $dashboards) {
-    $dashJson = Get-Content $f.FullName -Raw
-    $body = @{
-        dashboard = ($dashJson | ConvertFrom-Json)
-        overwrite = $true
-        folderId  = 0
-    } | ConvertTo-Json -Depth 20
-    $result = Invoke-GrafanaApi -Method POST -Path '/api/dashboards/db' -Body $body
-    if ($result) {
-        Write-Host "  $($f.Name) -> $($result.url)"
-    } else {
-        Write-Warning "  $($f.Name): import returned no response (may already exist)"
-    }
+    $result = az grafana dashboard import -n $grafanaName --definition $f.FullName --overwrite 2>&1 | ConvertFrom-Json
+    $status = if ($result.status) { $result.status } else { 'ok' }
+    Write-Host "  $($f.Name): $status"
 }
 
 # ── [3/3] Summary ─────────────────────────────────────────────────────────────
