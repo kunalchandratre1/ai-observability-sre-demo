@@ -300,6 +300,11 @@ output aksOidcIssuerUrl string = aks.outputs.oidcIssuerUrl
 output aksSystemNodeSku string = aksSystemNodeSku
 output aksUserNodeSku string = aksNodeSku
 output sreAgentUamiPrincipalId string = identity.outputs.sreAgentUamiPrincipalId
+output speechEndpoint string = speech.outputs.endpoint
+output speechName string = speech.outputs.name
+output openAiEndpoint string = openai.outputs.endpoint
+output openAiName string = openai.outputs.name
+output openAiChatDeploymentOutput string = openai.outputs.chatDeployment
 
 // SRE Agent UAMI: Reader on RG = full visibility into all resource properties, ARM metadata, configs
 var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
