@@ -243,6 +243,17 @@ module onpremVm 'modules/onpremvm.bicep' = if (onPremVmEnabled) {
   }
 }
 
+// UI static website hosting
+module uiStorage 'modules/uistorage.bicep' = {
+  name: 'uistorage${deploymentSuffix}'
+  params: {
+    prefix: prefix
+    env: env
+    location: location
+    tags: tags
+  }
+}
+
 // ----------------------------------------------------------------------
 // 5. AKS
 // ----------------------------------------------------------------------
@@ -305,6 +316,8 @@ output speechName string = speech.outputs.name
 output openAiEndpoint string = openai.outputs.endpoint
 output openAiName string = openai.outputs.name
 output openAiChatDeploymentOutput string = openai.outputs.chatDeployment
+output uiStorageAccount string = uiStorage.outputs.storageAccountName
+output uiUrl string = uiStorage.outputs.primaryEndpoint
 
 // SRE Agent UAMI: Reader on RG = full visibility into all resource properties, ARM metadata, configs
 var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'

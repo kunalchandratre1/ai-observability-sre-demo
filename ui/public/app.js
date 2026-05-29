@@ -1,10 +1,15 @@
 // Minimal vanilla JS — no build step needed. Serve `ui/public` from any static host
 // (Azure Static Web Apps, Storage $web, or a local `python -m http.server`).
+// These two constants are patched by 45-deploy-ui.ps1 with live Azure endpoint values.
+const DEFAULT_APIM_URL = '';
+const DEFAULT_GRAFANA_URL = '';
+
 const $ = (id) => document.getElementById(id);
 const ls = window.localStorage;
 
 ["apim-url","apim-key","user-id","grafana-url"].forEach(k => {
-  $(k).value = ls.getItem(k) || $(k).value;
+  const defaultVal = k === 'apim-url' ? DEFAULT_APIM_URL : k === 'grafana-url' ? DEFAULT_GRAFANA_URL : $(k).value;
+  $(k).value = ls.getItem(k) || defaultVal || $(k).value;
   $(k).addEventListener("change", () => ls.setItem(k, $(k).value));
 });
 

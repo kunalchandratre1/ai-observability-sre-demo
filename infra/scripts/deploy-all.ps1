@@ -10,6 +10,7 @@
       Step 2  — Deploy AKS workloads (nginx-ingress, OTel, api-service, worker-service)
       Step 3  — Bootstrap ADX schema + Event Hub data connections
       Step 4  — Apply APIM policies (inbound-correlation + diagnostics)
+      Step 4.5 — Deploy UI to Azure Storage static website (pre-bakes APIM + Grafana URLs)
       Step 5  — Import Grafana datasources + dashboards
       Step 6  — Create SRE Agent (optional, requires GitHub PAT)
 
@@ -45,6 +46,9 @@
 
 .PARAMETER SkipApim
     Skip Step 4 (APIM policies). Use when policies are already applied.
+
+.PARAMETER SkipUi
+    Skip Step 4.5 (UI deploy to Azure Storage). Use when UI is already deployed.
 
 .PARAMETER SkipGrafana
     Skip Step 5 (Grafana import). Use when dashboards are already imported.
@@ -86,6 +90,7 @@ param(
     [switch] $SkipAks,
     [switch] $SkipAdx,
     [switch] $SkipApim,
+    [switch] $SkipUi,
     [switch] $SkipGrafana,
     [switch] $SkipSreAgent,
     [switch] $RunSreAgent,
@@ -177,6 +182,12 @@ Invoke-Step -Name 'Step 4/6: Apply APIM policies' -Skip $SkipApim.IsPresent -Act
         -ResourceGroup $ResourceGroup
 }
 
+# ── Step 4.5: Deploy UI to Azure Storage static website ───────────────────────
+Invoke-Step -Name 'Step 4.5/6: Deploy UI to Azure Storage' -Skip $SkipUi.IsPresent -Action {
+    & "$ScriptDir\45-deploy-ui.ps1" `
+        -ResourceGroup $ResourceGroup
+}
+
 # ── Step 5: Import Grafana dashboards ─────────────────────────────────────────
 Invoke-Step -Name 'Step 5/6: Import Grafana datasources + dashboards' -Skip $SkipGrafana.IsPresent -Action {
     & "$ScriptDir\40-import-grafana.ps1" `
@@ -214,6 +225,9 @@ try {
     $apimGw    = (az apim list -g $rg -o json | ConvertFrom-Json)[0].properties.gatewayUrl
     $grafanaUrl = (az grafana list -g $rg -o json | ConvertFrom-Json)[0].properties.endpoint
     $aksName    = (az aks list -g $rg -o json | ConvertFrom-Json)[0].name
+    $uiStorAcct = (az storage account list -g $rg -o json | ConvertFrom-Json | Where-Object { $_.name -like '*ui*' } | Select-Object -First 1).name
+    $uiUrl      = if ($uiStorAcct) { az storage account show -n $uiStorAcct -g $rg --query "primaryEndpoints.web" -o tsv } else { '(not deployed yet)' }
+    Write-Host "  UI (Azure)   : $uiUrl" -ForegroundColor Green
     Write-Host "  APIM Gateway : $apimGw"
     Write-Host "  Grafana      : $grafanaUrl"
     Write-Host "  AKS          : $aksName (use: kubectl get pods -n app)"
