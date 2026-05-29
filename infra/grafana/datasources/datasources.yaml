@@ -17,10 +17,3 @@ datasources:
     jsonData:
       subscriptionId: REPLACE_SUB
       azureAuthType: msi
-  - name: Prometheus-AMW
-    type: prometheus
-    access: proxy
-    url: https://REPLACE_AMW.prometheus.monitor.azure.com
-    jsonData:
-      httpMethod: POST
-      azureCredentials: { authType: msi }

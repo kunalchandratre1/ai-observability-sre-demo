@@ -1,7 +1,6 @@
 param prefix string
 param env string
 param location string
-param monitorWorkspaceId string
 param adxClusterUri string
 param grafanaSku string
 param tags object
@@ -15,9 +14,6 @@ resource grafana 'Microsoft.Dashboard/grafana@2023-09-01' = {
   properties: {
     apiKey: 'Enabled'
     publicNetworkAccess: 'Enabled'
-    grafanaIntegrations: {
-      azureMonitorWorkspaceIntegrations: [ { azureMonitorWorkspaceResourceId: monitorWorkspaceId } ]
-    }
   }
 }
 

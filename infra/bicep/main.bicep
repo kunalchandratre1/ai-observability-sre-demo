@@ -154,7 +154,6 @@ module grafana 'modules/grafana.bicep' = {
     prefix: prefix
     env: env
     location: location
-    monitorWorkspaceId: monitoring.outputs.monitorWorkspaceId
     adxClusterUri: adx.outputs.clusterUri
     grafanaSku: grafanaSku
     tags: tags
@@ -258,9 +257,7 @@ module aks 'modules/aks.bicep' = {
     nodeSku: aksNodeSku
     aksSubnetId: network.outputs.aksSubnetId
     aksUamiId: identity.outputs.aksUamiId
-    monitorWorkspaceId: monitoring.outputs.monitorWorkspaceId
-    grafanaId: grafana.outputs.grafanaId
-    dcrPromId: monitoring.outputs.dcrPromId
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
     tags: tags
   }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Imports Grafana datasources (ADX, Azure Monitor, Managed Prometheus) and
+    Imports Grafana datasources (ADX, Azure Monitor) and
     all dashboard JSON files from infra/grafana/dashboards/.
     Safe to re-run — datasources and dashboards use upsert/overwrite.
 
@@ -33,14 +33,9 @@ $adxUri      = "https://$adxCluster.australiaeast.kusto.windows.net"
 $adxDb       = 'observability'
 
 $subId       = az account show --query id -o tsv
-$amwName     = (az monitor account list -g $rg -o json 2>$null | ConvertFrom-Json | Select-Object -First 1).name
-$amwEndpoint = if ($amwName) {
-    (az monitor account show -g $rg -n $amwName --query metrics.prometheusQueryEndpoint -o tsv 2>$null)
-} else { $null }
 
 Write-Host "  Grafana      : $grafanaHost"
 Write-Host "  ADX URI      : $adxUri"
-Write-Host "  AMW endpoint : $amwEndpoint"
 
 # ── Ensure Grafana Admin role for current user (idempotent) ──────────────────
 Write-Host ""
@@ -95,28 +90,6 @@ if (-not $azmonExists) {
     Write-Host "  AzureMonitor datasource: created."
 } else {
     Write-Host "  AzureMonitor datasource: already exists."
-}
-
-# Managed Prometheus datasource (only if AMW exists)
-if ($amwEndpoint) {
-    $dsPromUrl = $amwEndpoint.TrimEnd('/')
-    $dsProm = @{
-        name     = 'Prometheus-AMW'
-        type     = 'prometheus'
-        access   = 'proxy'
-        url      = $dsPromUrl
-        jsonData = @{ httpMethod = 'POST'; azureCredentials = @{ authType = 'msi' } }
-        secureJsonData = @{}
-    }
-    $dsPromJson = $dsProm | ConvertTo-Json -Depth 5 -Compress
-    $tmpDs3 = [System.IO.Path]::GetTempFileName() + '.json'
-    $dsPromJson | Set-Content $tmpDs3 -Encoding utf8
-    az grafana data-source delete -n $grafanaName --data-source 'Prometheus-AMW' 2>$null | Out-Null
-    az grafana data-source create -n $grafanaName --definition "@$tmpDs3" 2>&1 | Out-Null
-    Remove-Item $tmpDs3 -ErrorAction SilentlyContinue
-    Write-Host "  Prometheus-AMW datasource: done."
-} else {
-    Write-Warning "  No Azure Monitor Workspace found — Prometheus datasource skipped."
 }
 
 # ── [2/3] Dashboards via az grafana CLI ───────────────────────────────────────

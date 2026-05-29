@@ -99,16 +99,15 @@ Steps:
 3. Click **Test connection** — must pass (step 2 grants granted ADX Viewer)
 4. Click **Save**
 
-## 4. Connector: Azure Monitor (Azure resources — Plane 2 + Plane 3a + Plane 4 metrics)
+## 4. Connector: Azure Monitor (Azure resources — Plane 3a + Plane 4 metrics)
 
-This connector covers:
-- **Plane 2 — AKS infra metrics**: pod/node CPU, memory, restarts → Azure Managed Prometheus (AMW `aiosre-amw-demo`)
-- **Plane 3a — APIM platform metrics**: request rate, latency, 4xx/5xx → Azure Monitor
+This connector covers Azure Monitor **platform metrics** accessible via the ARM Metrics API:
+- **Plane 3a — APIM platform metrics**: request rate, latency, 4xx/5xx
 - **Plane 4 — PaaS metrics**: Cosmos DB RU/s, Service Bus queue depth, Redis evictions, Key Vault latency
 
-> **There is no separate Prometheus connector in SRE Agent.** Azure Managed Prometheus metrics stored in the AMW workspace are accessed through this Azure Monitor connector — the agent queries them via the Azure Monitor Metrics API. When you scope this connector to RG `ai-obs-sre-demo`, the agent automatically discovers and queries `aiosre-amw-demo`.
-
-> Without this connector the agent can see application symptoms in ADX but cannot correlate with AKS infra metrics or PaaS service health.
+> **AKS pod/node metrics are NOT in this connector.** Container Insights writes AKS platform data to Log Analytics (section 5 below) where the agent queries `KubePodInventory`, `KubeNodeInventory`, and `ContainerLog` tables via KQL.
+>
+> **Managed Prometheus (AMW) is NOT supported as an SRE Agent connector.** Prometheus is for Grafana PromQL dashboards only.
 
 Steps:
 1. SRE Agent portal → **Full setup** → **Azure resources** → `+`
@@ -124,9 +123,18 @@ Steps:
 
 > **Skip Incidents** — requires ITSM integration (ServiceNow/Jira), not part of this demo.
 
-## 5. Connector: Log Analytics (Plane 4 PaaS diagnostic logs)
+## 5. Connector: Log Analytics (Plane 2 AKS platform + Plane 4 PaaS diagnostic logs)
 
-This connector gives the agent access to PaaS **diagnostic logs** (as opposed to metrics in section 4):
+This is the primary connector for both AKS infrastructure visibility and PaaS diagnostic logs.
+
+**Plane 2 — AKS platform monitoring via Container Insights:**
+- `KubePodInventory` — pod status, restarts, phase, node assignment
+- `KubeNodeInventory` — node CPU/memory pressure, conditions
+- `ContainerLog` / `ContainerLogV2` — pod stdout/stderr
+- `KubeEvents` — OOMKilled, CrashLoopBackOff, BackOff events
+- `Perf` — container CPU/memory utilisation timeseries
+
+**Plane 4 — PaaS diagnostic logs:**
 - Cosmos DB throttle errors, partition key warnings
 - Service Bus dead-letter events, connection errors
 - Redis connection failures, eviction events
@@ -134,9 +142,11 @@ This connector gives the agent access to PaaS **diagnostic logs** (as opposed to
 - Azure Firewall deny logs
 - VM syslog / Windows event logs
 
-> **Which workspace to select:** Use **`aiosre-la-demo`** — this is where all bicep `diagnosticSettings` route PaaS logs via `logAnalyticsWorkspaceId`.
+> **Which workspace to select:** Use **`aiosre-la-demo`** — this is where:
+> - Bicep `diagnosticSettings` routes all PaaS logs (via `logAnalyticsWorkspaceId`)
+> - Container Insights (omsagent addon) writes all AKS platform tables
 >
-> Do **not** select `aiosre-law-demo` — that is the backing store for the SRE Agent's own App Insights operational telemetry. The agent uses it internally; you don't connect to it as an external data source.
+> Do **not** select `aiosre-law-demo` — that is the backing store for the SRE Agent's own App Insights operational telemetry. The agent uses it internally; you don’t connect to it as an external data source.
 
 Steps:
 1. SRE Agent portal → **Full setup** → **Logging providers** → `+` → **Log Analytics**
