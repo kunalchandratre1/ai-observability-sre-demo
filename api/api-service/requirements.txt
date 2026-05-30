@@ -19,3 +19,4 @@ opentelemetry-instrumentation-redis==0.50b0
 opentelemetry-instrumentation-logging==0.50b0
 python-json-logger==2.0.7
 ulid-py==1.1.0
+aiohttp>=3.9.0

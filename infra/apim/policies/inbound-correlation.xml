@@ -1,15 +1,49 @@
 <!--
   Inbound correlation policy applied to the Voice Orders API.
   Enforces:
+    - CORS (allow azurewebsites.net UI origin)
     - x-correlation-id (create if missing)
     - x-request-id from APIM context.RequestId (overwrite if missing)
     - traceparent / tracestate pass-through (W3C)
-    - subscription-key header check (placeholder auth)
+    - subscription-key header check (placeholder auth; skipped for OPTIONS preflight)
     - rate-limit (used in fault scenario 2)
 -->
 <policies>
   <inbound>
     <base />
+
+    <!-- 0. CORS: allow browser calls from UI (App Service) -->
+    <cors allow-credentials="true">
+      <allowed-origins>
+        <origin>https://aiosre-ui-demo.azurewebsites.net</origin>
+        <origin>http://localhost:8080</origin>
+        <origin>http://localhost:3000</origin>
+      </allowed-origins>
+      <allowed-methods preflight-result-max-age="300">
+        <method>GET</method>
+        <method>POST</method>
+        <method>PUT</method>
+        <method>DELETE</method>
+        <method>OPTIONS</method>
+      </allowed-methods>
+      <allowed-headers>
+        <header>*</header>
+      </allowed-headers>
+      <expose-headers>
+        <header>x-correlation-id</header>
+        <header>x-request-id</header>
+        <header>x-trace-id</header>
+      </expose-headers>
+    </cors>
+
+    <!-- Skip auth + heavy processing for CORS preflight -->
+    <choose>
+      <when condition="@(context.Request.Method == &quot;OPTIONS&quot;)">
+        <return-response>
+          <set-status code="200" reason="OK" />
+        </return-response>
+      </when>
+    </choose>
 
     <!-- 1. Correlation ID (business txn) -->
     <set-variable name="cid" value="@(context.Request.Headers.GetValueOrDefault(&quot;x-correlation-id&quot;, Guid.NewGuid().ToString()))" />
