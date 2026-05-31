@@ -39,8 +39,13 @@ $UAMI_CID  = az identity show -g $rg -n $UAMI --query clientId -o tsv
 $EHNS      = (az eventhubs namespace list -g $rg -o json | ConvertFrom-Json)[0].name
 
 $cogAccounts      = az cognitiveservices account list -g $rg -o json | ConvertFrom-Json
-$speechName       = ($cogAccounts | Where-Object kind -eq 'SpeechServices' | Select-Object -First 1).name
-$SPEECH_ENDPOINT  = az cognitiveservices account show -g $rg -n $speechName --query properties.endpoint -o tsv
+$speechAccount    = $cogAccounts | Where-Object kind -eq 'SpeechServices' | Select-Object -First 1
+$speechName       = $speechAccount.name
+$SPEECH_REGION    = $speechAccount.location   # e.g. australiaeast
+# For AAD token auth, Speech TTS requires the custom-domain endpoint + /tts path.
+# The raw endpoint from Azure is https://<name>.cognitiveservices.azure.com/ — append /tts (strip trailing slash first).
+$speechRawEndpoint = az cognitiveservices account show -g $rg -n $speechName --query properties.endpoint -o tsv
+$SPEECH_ENDPOINT  = ($speechRawEndpoint.TrimEnd('/')) + '/tts'
 $openaiName       = ($cogAccounts | Where-Object kind -eq 'OpenAI' | Select-Object -First 1).name
 $OPENAI_ENDPOINT  = az cognitiveservices account show -g $rg -n $openaiName --query properties.endpoint -o tsv
 
@@ -60,6 +65,7 @@ Write-Host "  Cosmos   : $COSMOS_ENDPOINT"
 Write-Host "  Redis    : $REDIS_HOST"
 Write-Host "  SB FQDN  : $SB_FQDN"
 Write-Host "  APIM     : $APIM"
+Write-Host "  Speech   : $SPEECH_ENDPOINT (region: $SPEECH_REGION)"
 
 # ── Ensure kubelet identity has AcrPull on ACR ────────────────────────────────
 # The kubelet (node-pool) identity is auto-created by AKS and is separate from
@@ -253,6 +259,7 @@ $appYaml = $appYaml `
     -replace 'REPLACE_ACR',                 $ACR `
     -replace 'REPLACE_TAG',                 $Tag `
     -replace 'REPLACE_WITH_AKS_UAMI_CLIENT_ID', $UAMI_CID `
+    -replace 'REPLACE_SPEECH_REGION',       $SPEECH_REGION `
     -replace 'REPLACE_SPEECH_ENDPOINT',     $SPEECH_ENDPOINT `
     -replace 'REPLACE_OPENAI_ENDPOINT',     $OPENAI_ENDPOINT `
     -replace 'REPLACE_COSMOS_ENDPOINT',     $COSMOS_ENDPOINT `

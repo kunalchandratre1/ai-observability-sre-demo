@@ -35,6 +35,11 @@
 .PARAMETER SkipBicep
     Skip Step 0 (Bicep infrastructure). Use when infra is already deployed.
 
+.PARAMETER SkipApimVnetInject
+    Skip Step 0.5 (APIM VNet injection). Use when APIM is already VNet-injected.
+    NOTE: VNet injection takes 30-45 min on first run. If skipped, APIM cannot
+    reach the AKS internal LB and all orders will return 500.
+
 .PARAMETER SkipBuild
     Skip Step 1 (build & push). Use when images are already in ACR.
 
@@ -66,7 +71,8 @@
     Path to Bicep parameters JSON. Default: auto-detected from infra/bicep/.
 
 .EXAMPLE
-    # FULL FRESH DEPLOY (first time — deploys Bicep + everything)
+    # FULL FRESH DEPLOY (first time — deploys Bicep + APIM VNet inject + everything)
+    # WARNING: First run takes ~60-90 min due to APIM VNet injection (30-45 min)
     .\deploy-all.ps1
 
 .EXAMPLE
@@ -86,6 +92,7 @@ param(
     [string] $ResourceGroup  = 'ai-obs-sre-demo',
     [string] $Tag            = (Get-Date -Format 'yyyyMMddHHmmss'),
     [switch] $SkipBicep,
+    [switch] $SkipApimVnetInject,
     [switch] $SkipBuild,
     [switch] $SkipAks,
     [switch] $SkipAdx,
@@ -145,6 +152,7 @@ Write-Host "============================================================"
 Write-Host "  AI Observability SRE Demo — Full Deployment"
 Write-Host "  ResourceGroup : $ResourceGroup"
 Write-Host "  Image Tag     : $Tag"
+Write-Host "  APIM VNet Inj : $(if ($SkipApimVnetInject) { 'SKIP (-SkipApimVnetInject)' } else { 'YES (30-45 min first run)' })"
 Write-Host "  Started       : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC"
 Write-Host "============================================================"
 
@@ -153,6 +161,14 @@ Invoke-Step -Name 'Step 0/6: Deploy Bicep infrastructure' -Skip $SkipBicep.IsPre
     $bicepArgs = @('-ResourceGroup', $ResourceGroup)
     if ($ParametersFile) { $bicepArgs += @('-ParametersFile', $ParametersFile) }
     & "$ScriptDir\10-deploy-bicep.ps1" @bicepArgs
+}
+
+# ── Step 0.5: APIM VNet injection ────────────────────────────────────────────
+# Must run AFTER Bicep (creates VNet/subnet/NSG) and BEFORE AKS workloads
+# (which set APIM backend to the internal ingress IP).
+# Takes 30-45 min on first run. Safe to skip with -SkipApimVnetInject if already done.
+Invoke-Step -Name 'Step 0.5/6: APIM VNet injection (External mode)' -Skip $SkipApimVnetInject.IsPresent -Action {
+    & "$ScriptDir\11-apim-vnet-inject.ps1" -ResourceGroup $ResourceGroup
 }
 
 # ── Step 1: Build & push images ───────────────────────────────────────────────
