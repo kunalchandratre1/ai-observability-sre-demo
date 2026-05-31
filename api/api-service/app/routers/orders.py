@@ -50,6 +50,8 @@ async def submit_order(payload: VoiceOrderRequest, request: Request):
     cid = get_correlation_id()
     rid = get_request_id()
 
+    deps_outcome: dict[str, dict[str, Any]] = {}
+
     if settings.fault_extra_cpu_burn_ms > 0:
         end = time.perf_counter() + (settings.fault_extra_cpu_burn_ms / 1000.0)
         while time.perf_counter() < end:
@@ -58,6 +60,27 @@ async def submit_order(payload: VoiceOrderRequest, request: Request):
     if settings.fault_force_exception:
         log.error("synthetic.unhandled_exception", extra={"order_id": order_id})
         raise RuntimeError("synthetic unhandled exception (fault_force_exception=true)")
+
+    # Fault: Cosmos DNS break — attempt a direct Cosmos write so AppExceptions appear in ADX/Grafana.
+    # This simulates the scenario where Cosmos Private Endpoint DNS is misconfigured;
+    # api-service catches the DNS error, marks cosmos=error in the response, and logs to ADX.
+    if settings.fault_force_cosmos_dns_break:
+        try:
+            await deps.cosmos_write_order({
+                "id": f"dns-probe-{order_id}",
+                "order_id": f"dns-probe-{order_id}",
+                "user_id": payload.user_id,
+                "_ttl": 60,
+            })
+            deps_outcome["cosmos"] = {"status": "ok"}
+        except Exception as ex:
+            deps_outcome["cosmos"] = {"status": "error", "error": str(ex)[:200]}
+            log.error("fault.cosmos_dns_break.detected", extra={
+                "order_id": order_id,
+                "error_type": type(ex).__name__,
+                "error_message": str(ex)[:300],
+            })
+        # Continue — let the order flow proceed so SB + worker also observe the fault
 
     # Fault: Cosmos RU throttle — fire 20 parallel dummy writes to exhaust the 400 RU/s budget
     # This causes subsequent real writes in the same second to get 429 TooManyRequests from Cosmos.
@@ -75,8 +98,6 @@ async def submit_order(payload: VoiceOrderRequest, request: Request):
                 pass
         await asyncio.gather(*[_dummy_write(i) for i in range(20)], return_exceptions=True)
         log.warning("fault.cosmos_throttle.burst_fired", extra={"order_id": order_id, "burst_writes": 20})
-
-    deps_outcome: dict[str, dict[str, Any]] = {}
 
     # Extract traceparent for downstream propagation
     span = trace.get_current_span()

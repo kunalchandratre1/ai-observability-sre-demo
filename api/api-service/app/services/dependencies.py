@@ -204,6 +204,8 @@ async def enqueue_voice_order(order_payload: dict, traceparent: Optional[str]) -
 async def cosmos_write_order(doc: dict) -> None:
     """Write a document to the orders container. Used by fault injection to generate RU load."""
     endpoint = settings.cosmos_endpoint
+    if settings.fault_force_cosmos_dns_break:
+        endpoint = endpoint.replace(".documents.azure.com", ".invalid-dns.azure.com")
     with tracer.start_as_current_span("dep.Cosmos.write") as span:
         stamp_span_with_correlation(span)
         started = time.perf_counter()
