@@ -56,6 +56,13 @@ sed -e "s|REPLACE_EHNS|$EHNS|g" \
 kubectl apply -f "$OUT_DIR/otel-collector.yaml"
 kubectl apply -f "$OUT_DIR/app.yaml"
 
+# kafka-bridge: HTTP→AMQP proxy that forwards OTLP/JSON from otelcol to Azure
+# Event Hub using azure-eventhub SDK + Workload Identity (no SAS keys).
+sed -e "s|REPLACE_WITH_AKS_UAMI_CLIENT_ID|$UAMI_CID|g" \
+    -e "s|REPLACE_EHNS|$EHNS|g" \
+    "$(dirname "$0")/../../api/k8s/kafka-bridge.yaml" > "$OUT_DIR/kafka-bridge.yaml"
+kubectl apply -f "$OUT_DIR/kafka-bridge.yaml"
+
 # Update APIM backend to point at internal ingress
 APIM=$(az apim list -g "$RG" --query "[0].name" -o tsv)
 az apim api update -g "$RG" --service-name "$APIM" --api-id voice-orders \
