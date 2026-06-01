@@ -56,10 +56,10 @@ Write-Host "  APIM instance : $apimName"
 # ── Check if already injected ─────────────────────────────────────────────────
 $apimJson = az apim show -g $rg -n $apimName -o json | ConvertFrom-Json
 $currentVnetType = $apimJson.virtualNetworkType
-$currentVnetId   = $apimJson.virtualNetworkConfiguration.vnetid
+$currentPrivateIPs = $apimJson.privateIpAddresses
 
-if ($currentVnetType -eq 'External' -and $currentVnetId -ne '00000000-0000-0000-0000-000000000000' -and $currentVnetId) {
-    Write-Host "  APIM is already VNet-injected (External, vnetid=$currentVnetId). Nothing to do." -ForegroundColor Green
+if ($currentVnetType -eq 'External' -and $currentPrivateIPs) {
+    Write-Host "  APIM is already VNet-injected (External, privateIPs=$($currentPrivateIPs -join ',')). Nothing to do." -ForegroundColor Green
     exit 0
 }
 
@@ -134,14 +134,31 @@ Write-Host "      Started: $(Get-Date -Format 'HH:mm:ss')"
 
 $apimResourceId = "/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.ApiManagement/service/$apimName"
 
-# Build the PUT body using the current APIM config + VNet injection
+# stv2 platform requires a Standard SKU Public IP for External VNet injection.
+# Create one if it doesn't exist yet.
+$pipName = "$apimName-pip"
+$existingPip = az network public-ip show -g $rg -n $pipName -o json 2>$null | ConvertFrom-Json
+if (-not $existingPip) {
+    Write-Host "  [+] Creating Standard SKU Public IP '$pipName' (required for stv2 External VNet injection)..."
+    az network public-ip create -g $rg -n $pipName `
+        --sku Standard --allocation-method Static `
+        --location $apimJson.location --dns-name $pipName `
+        --output none
+    Write-Host "  [OK] Created '$pipName'"
+} else {
+    Write-Host "  [OK] Public IP '$pipName' already exists"
+}
+$pipId = az network public-ip show -g $rg -n $pipName --query id -o tsv
+
+# Build the PUT body: stv2 External mode requires publicIpAddressId
 $putBody = @{
     location   = $apimJson.location
     sku        = @{ name = $apimJson.sku.name; capacity = $apimJson.sku.capacity }
     properties = @{
-        publisherEmail             = $apimJson.publisherEmail
-        publisherName              = $apimJson.publisherName
-        virtualNetworkType         = 'External'
+        publisherEmail              = $apimJson.publisherEmail
+        publisherName               = $apimJson.publisherName
+        virtualNetworkType          = 'External'
+        publicIpAddressId           = $pipId
         virtualNetworkConfiguration = @{ subnetResourceId = $subnetId }
     }
 } | ConvertTo-Json -Depth 5
@@ -150,7 +167,7 @@ $putBodyFile = Join-Path $env:TEMP "apim-vnet-inject.json"
 $putBody | Set-Content $putBodyFile -Encoding UTF8
 
 az rest --method PUT `
-    --url "https://management.azure.com$apimResourceId`?api-version=2023-05-01-preview" `
+    --url "https://management.azure.com$apimResourceId`?api-version=2022-08-01" `
     --body "@$putBodyFile" `
     --output none 2>&1
 
@@ -167,30 +184,24 @@ $lastState = ''
 
 while ((Get-Date) -lt $deadline) {
     Start-Sleep 60
-    $state = az apim show -g $rg -n $apimName --query "{ps:provisioningState, vt:virtualNetworkType, vid:virtualNetworkConfiguration.vnetid}" -o json 2>$null | ConvertFrom-Json
+    $state = az apim show -g $rg -n $apimName --query "{ps:provisioningState, vt:virtualNetworkType, pips:privateIpAddresses}" -o json 2>$null | ConvertFrom-Json
     $ps    = $state.ps
     $vt    = $state.vt
-    $vid   = $state.vid
+    $pips  = $state.pips
 
     if ($ps -ne $lastState) {
-        Write-Host "  $(Get-Date -Format 'HH:mm:ss')  provisioningState=$ps  vnetType=$vt  vnetId=$vid"
+        Write-Host "  $(Get-Date -Format 'HH:mm:ss')  provisioningState=$ps  vnetType=$vt  privateIPs=$($pips -join ',')"
         $lastState = $ps
     }
 
-    if ($ps -eq 'Succeeded' -and $vt -eq 'External' -and $vid -ne '00000000-0000-0000-0000-000000000000') {
+    if ($ps -eq 'Succeeded' -and $vt -eq 'External' -and $pips) {
         Write-Host ""
         Write-Host "============================================================" -ForegroundColor Green
         Write-Host "  APIM VNet injection SUCCEEDED!" -ForegroundColor Green
-        Write-Host "  vnetType = External" -ForegroundColor Green
-        Write-Host "  vnetId   = $vid" -ForegroundColor Green
+        Write-Host "  vnetType   = External" -ForegroundColor Green
+        Write-Host "  privateIPs = $($pips -join ', ')" -ForegroundColor Green
         Write-Host "============================================================" -ForegroundColor Green
         Write-Host ""
-
-        # Show private IP if available
-        $privateIps = az apim show -g $rg -n $apimName --query "privateIpAddresses" -o json 2>$null | ConvertFrom-Json
-        if ($privateIps) {
-            Write-Host "  APIM private IP(s): $($privateIps -join ', ')"
-        }
         Write-Host "  APIM gateway URL  : $($apimJson.gatewayUrl)"
         exit 0
     }
