@@ -46,9 +46,17 @@
 )
 
 // ----------------- Raw landing tables (1 column 'records' from Event Hub Capture/JSON) -----------------
+// RawAksOtel is the primary ingestion target for the aks-otel Event Hub.
+// The kafka-bridge flattens each OTLP batch into individual records (one JSON object
+// per EH message) tagged with _type='log' or _type='span'. Update policies below
+// fan the data out to AppLogs and AppSpans.
 
 .create-merge table RawAksOtel (records:dynamic)
 .create-merge table RawApimDiag (records:dynamic)
+
+// Mapping: map entire JSON message body to the `records` dynamic column.
+.create-or-alter table RawAksOtel ingestion json mapping 'RawAksOtelMapping'
+'[{"column":"records","path":"$","datatype":"dynamic"}]'
 
 // ----------------- JSON ingestion mappings -----------------
 
@@ -140,8 +148,76 @@
 
 .alter table AppExceptions policy update @'[{"Source":"AppLogs","Query":"AppExceptionsExtract()","IsEnabled":true,"IsTransactional":false}]'
 
+// Update policy: RawAksOtel → AppLogs
+// Fires on every new batch ingested into RawAksOtel; filters _type='log'
+// and projects to the AppLogs schema. Timestamps converted from nanoseconds.
+.create-or-alter function RawAksOtelToAppLogs() {
+    RawAksOtel
+    | where records._type == 'log'
+    | project
+        Timestamp         = unixtime_seconds_todatetime(tolong(tostring(records['timeUnixNano'])) / 1000000000),
+        SeverityText      = tostring(records['severityText']),
+        Body              = records['body'],
+        Resource          = records['resource'],
+        Attributes        = records['attributes'],
+        TraceId           = tostring(records['traceId']),
+        SpanId            = tostring(records['spanId']),
+        CorrelationId     = tostring(records['attributes']['correlation_id']),
+        RequestId         = tostring(records['attributes']['request_id']),
+        UserId            = tostring(records['attributes']['user_id']),
+        OrderId           = tostring(records['attributes']['order_id']),
+        ServiceName       = tostring(records['resource']['service.name']),
+        DeploymentVersion = tostring(records['resource']['service.version']),
+        Pod               = tostring(records['resource']['k8s.pod.name']),
+        Namespace         = tostring(records['resource']['k8s.namespace.name']),
+        Node              = tostring(records['resource']['k8s.node.name'])
+}
+
+.alter table AppLogs policy update @'[{"Source":"RawAksOtel","Query":"RawAksOtelToAppLogs()","IsEnabled":true,"IsTransactional":false}]'
+
+// Update policy: RawAksOtel → AppSpans
+// Fires on every new batch ingested into RawAksOtel; filters _type='span'
+// and projects to the AppSpans schema. DurationMs computed from ns timestamps.
+.create-or-alter function RawAksOtelToAppSpans() {
+    RawAksOtel
+    | where records._type == 'span'
+    | extend startNs = tolong(tostring(records['startTimeUnixNano']))
+    | extend endNs   = tolong(tostring(records['endTimeUnixNano']))
+    | project
+        Timestamp            = unixtime_seconds_todatetime(startNs / 1000000000),
+        EndTimestamp         = unixtime_seconds_todatetime(endNs / 1000000000),
+        DurationMs           = todouble(endNs - startNs) / 1000000.0,
+        TraceId              = tostring(records['traceId']),
+        SpanId               = tostring(records['spanId']),
+        ParentSpanId         = tostring(records['parentSpanId']),
+        Name                 = tostring(records['name']),
+        Kind                 = tostring(records['kind']),
+        StatusCode           = tostring(records['status']['code']),
+        StatusMessage        = tostring(records['status']['message']),
+        Attributes           = records['attributes'],
+        Resource             = records['resource'],
+        Events               = records['events'],
+        Links                = records['links'],
+        CorrelationId        = tostring(records['attributes']['correlation_id']),
+        RequestId            = tostring(records['attributes']['request_id']),
+        UserId               = tostring(records['attributes']['user_id']),
+        OrderId              = tostring(records['attributes']['order_id']),
+        DependencyName       = tostring(records['attributes']['dependency_name']),
+        DependencyEndpoint   = tostring(records['attributes']['dependency.endpoint']),
+        DependencyStatusCode = toint(records['attributes']['dependency.status_code']),
+        DependencyLatencyMs  = todouble(records['attributes']['dependency.latency_ms']),
+        ErrorType            = tostring(records['attributes']['error.type']),
+        ErrorMessage         = tostring(records['attributes']['error.message']),
+        ServiceName          = tostring(records['resource']['service.name']),
+        DeploymentVersion    = tostring(records['resource']['service.version']),
+        Pod                  = tostring(records['resource']['k8s.pod.name']),
+        Namespace            = tostring(records['resource']['k8s.namespace.name'])
+}
+
+.alter table AppSpans policy update @'[{"Source":"RawAksOtel","Query":"RawAksOtelToAppSpans()","IsEnabled":true,"IsTransactional":false}]'
+
 // ----------------- Retention -----------------
-.alter table AppLogs       policy retention softdelete = 30d
-.alter table AppSpans      policy retention softdelete = 30d
-.alter table AppExceptions policy retention softdelete = 30d
-.alter table APIMGatewayLogs policy retention softdelete = 30d
+.alter table AppLogs       policy retention '{"SoftDeletePeriod":"30.00:00:00","Recoverability":"Enabled"}'
+.alter table AppSpans      policy retention '{"SoftDeletePeriod":"30.00:00:00","Recoverability":"Enabled"}'
+.alter table AppExceptions policy retention '{"SoftDeletePeriod":"30.00:00:00","Recoverability":"Enabled"}'
+.alter table APIMGatewayLogs policy retention '{"SoftDeletePeriod":"30.00:00:00","Recoverability":"Enabled"}'

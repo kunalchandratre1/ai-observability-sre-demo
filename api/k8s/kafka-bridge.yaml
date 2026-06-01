@@ -20,7 +20,13 @@ metadata:
 data:
   bridge.py: |
     #!/usr/bin/env python3
-    import os, sys, threading
+    """kafka-bridge: receives OTLP/HTTP JSON from otelcol and forwards to Azure
+    Event Hub. Flattens each OTLP batch into individual log/span records so ADX
+    JSON ingestion mappings work directly on each message (one JSON object per
+    Event Hub message). Adds a '_type' field ('log' or 'span') as a discriminator
+    used by ADX update-policy functions that fan-out to AppLogs / AppSpans.
+    """
+    import os, sys, threading, json, gzip
     from flask import Flask, request, Response
     from azure.eventhub import EventHubProducerClient, EventData
     from azure.identity import DefaultAzureCredential
@@ -37,9 +43,9 @@ data:
             credential=credential,
         )
         # Warm-up: validates the credential and pre-establishes the AMQP link
-        batch = producer.create_batch()
-        batch.add(EventData(b'{"_bridge":"startup"}'))
-        producer.send_batch(batch)
+        b = producer.create_batch()
+        b.add(EventData(b'{"_type":"startup"}'))
+        producer.send_batch(b)
         print('kafka-bridge: connected and warm!', flush=True)
     except Exception as exc:
         print(f'kafka-bridge FATAL: {exc}', file=sys.stderr, flush=True)
@@ -48,25 +54,125 @@ data:
     _lock = threading.Lock()
     app = Flask(__name__)
 
-    def _send(data: bytes):
+    # ── OTLP helpers ─────────────────────────────────────────────────────────
+
+    def _val(v):
+        """Unwrap an OTLP AnyValue: {stringValue|intValue|doubleValue|...}."""
+        if not isinstance(v, dict):
+            return v
+        for k in ('stringValue', 'intValue', 'doubleValue', 'boolValue', 'bytesValue'):
+            if k in v:
+                return v[k]
+        if 'arrayValue' in v:
+            return [_val(i) for i in v['arrayValue'].get('values', [])]
+        if 'kvlistValue' in v:
+            return {kv['key']: _val(kv['value']) for kv in v['kvlistValue'].get('values', [])}
+        return v
+
+    def _attrs(arr):
+        """Convert OTLP attributes array [{key, value}] to a flat dict."""
+        return {a['key']: _val(a.get('value', {})) for a in (arr or [])}
+
+    def _flatten_logs(data: bytes) -> list:
+        """Expand resourceLogs → individual flattened log-record dicts."""
+        try:
+            if data[:2] == b'\x1f\x8b':
+                data = gzip.decompress(data)
+            payload = json.loads(data)
+        except Exception:
+            return []
+        records = []
+        for rl in payload.get('resourceLogs', []):
+            res_attrs = _attrs(rl.get('resource', {}).get('attributes', []))
+            for sl in rl.get('scopeLogs', []):
+                for lr in sl.get('logRecords', []):
+                    attrs = _attrs(lr.get('attributes', []))
+                    records.append({
+                        '_type':        'log',
+                        'timeUnixNano': lr.get('timeUnixNano', '0'),
+                        'severityText': lr.get('severityText', ''),
+                        'body':         _val(lr.get('body', {})),
+                        'traceId':      lr.get('traceId', ''),
+                        'spanId':       lr.get('spanId', ''),
+                        'attributes':   attrs,
+                        'resource':     res_attrs,
+                    })
+        return records
+
+    def _flatten_spans(data: bytes) -> list:
+        """Expand resourceSpans → individual flattened span dicts."""
+        try:
+            if data[:2] == b'\x1f\x8b':
+                data = gzip.decompress(data)
+            payload = json.loads(data)
+        except Exception:
+            return []
+        spans = []
+        for rs in payload.get('resourceSpans', []):
+            res_attrs = _attrs(rs.get('resource', {}).get('attributes', []))
+            for ss in rs.get('scopeSpans', []):
+                for sp in ss.get('spans', []):
+                    attrs = _attrs(sp.get('attributes', []))
+                    spans.append({
+                        '_type':             'span',
+                        'startTimeUnixNano': sp.get('startTimeUnixNano', '0'),
+                        'endTimeUnixNano':   sp.get('endTimeUnixNano', '0'),
+                        'traceId':           sp.get('traceId', ''),
+                        'spanId':            sp.get('spanId', ''),
+                        'parentSpanId':      sp.get('parentSpanId', ''),
+                        'name':              sp.get('name', ''),
+                        'kind':              sp.get('kind', 0),
+                        'status':            sp.get('status', {}),
+                        'attributes':        attrs,
+                        'events':            sp.get('events', []),
+                        'links':             sp.get('links', []),
+                        'resource':          res_attrs,
+                    })
+        return spans
+
+    def _send_records(records: list):
+        """Send a list of dicts to Event Hub, each as one JSON message."""
+        if not records:
+            return
         with _lock:
             batch = producer.create_batch()
-            batch.add(EventData(data))
-            producer.send_batch(batch)
+            sent = 0
+            for rec in records:
+                payload = json.dumps(rec).encode()
+                try:
+                    batch.add(EventData(payload))
+                    sent += 1
+                except ValueError:
+                    # batch size limit reached — flush and continue
+                    producer.send_batch(batch)
+                    batch = producer.create_batch()
+                    batch.add(EventData(payload))
+                    sent += 1
+            if batch:
+                producer.send_batch(batch)
+            print(f'kafka-bridge: sent {sent} record(s) to EH (sample: {str(records[0])[:120]})', flush=True)
+
+    # ── Routes ───────────────────────────────────────────────────────────────
 
     @app.route('/v1/logs', methods=['POST'])
     def logs():
-        _send(request.data)
+        records = _flatten_logs(request.data)
+        if not records:
+            print(f'kafka-bridge: /v1/logs got {len(request.data)}B but 0 records (sample: {request.data[:80]})', flush=True)
+        _send_records(records)
         return Response('{}', content_type='application/json')
 
     @app.route('/v1/traces', methods=['POST'])
     def traces():
-        _send(request.data)
+        records = _flatten_spans(request.data)
+        if not records:
+            print(f'kafka-bridge: /v1/traces got {len(request.data)}B but 0 records (sample: {request.data[:80]})', flush=True)
+        _send_records(records)
         return Response('{}', content_type='application/json')
 
     @app.route('/v1/metrics', methods=['POST'])
     def metrics():
-        _send(request.data)
+        # Metrics not ingested into ADX — acknowledged and dropped
         return Response('{}', content_type='application/json')
 
     @app.route('/health')
