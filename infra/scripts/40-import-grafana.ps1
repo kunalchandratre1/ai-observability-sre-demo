@@ -31,6 +31,7 @@ $grafanaHost = $grafanaHost.TrimEnd('/')
 $adxCluster  = (az kusto cluster list -g $rg -o json | ConvertFrom-Json)[0].name
 # Use the cluster's own URI — avoids location display-name vs slug mismatch ("Australia East" vs "australiaeast")
 $adxUri      = (az kusto cluster show -g $rg -n $adxCluster --query uri -o tsv).TrimEnd('/')
+$grafanaMsiId = az grafana show -g $rg -n $grafanaName --query identity.principalId -o tsv
 $adxDb       = 'observability'
 
 $subId       = az account show --query id -o tsv
@@ -81,6 +82,12 @@ Remove-Item $tmpDs -ErrorAction SilentlyContinue
 # Resolve the actual UID assigned by Grafana (changes every time datasource is recreated)
 $adxDsUid = (az grafana data-source list -n $grafanaName -o json | ConvertFrom-Json | Where-Object { $_.name -eq 'ADX' }).uid
 Write-Host "  ADX datasource: done (uid=$adxDsUid)."
+
+# Grant Grafana MSI Viewer access on ADX observability database (idempotent)
+Write-Host ""
+Write-Host "=== [1b/3] Granting Grafana MSI Viewer access on ADX database ==="
+az kusto database add-principal --cluster-name $adxCluster --database-name observability --resource-group $rg --value name="grafana-msi" type="App" app-id="$grafanaMsiId" email="" fqn="" role="Viewer" -o none 2>&1 | Out-Null
+Write-Host "  ADX Viewer granted to Grafana MSI ($grafanaMsiId)." -ForegroundColor Green
 
 # Azure Monitor datasource (usually pre-created by AMG, just verify)
 $existingDs = az grafana data-source list -n $grafanaName -o json 2>&1 | ConvertFrom-Json
