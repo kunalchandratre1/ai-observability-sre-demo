@@ -103,11 +103,13 @@ Invoke-Kql @"
 .create-or-alter function AppExceptionsExtract() {
     AppLogs
     | where SeverityText in ("ERROR","FATAL")
-    | where isnotempty(tostring(Attributes["exception.type"])) or isnotempty(tostring(Attributes["error.type"]))
-    | extend ExceptionType    = coalesce(tostring(Attributes["exception.type"]), tostring(Attributes["error.type"]))
-    | extend ExceptionMessage = coalesce(tostring(Attributes["exception.message"]), tostring(Attributes["error.message"]))
+    | where isnotempty(tostring(Attributes["exception.type"]))
+       or isnotempty(tostring(Attributes["error.type"]))
+       or isnotempty(tostring(Attributes["error_type"]))
+    | extend ExceptionType    = coalesce(tostring(Attributes["exception.type"]), tostring(Attributes["error.type"]), tostring(Attributes["error_type"]))
+    | extend ExceptionMessage = coalesce(tostring(Attributes["exception.message"]), tostring(Attributes["error.message"]), tostring(Attributes["error_message"]))
     | extend StackTrace       = tostring(Attributes["exception.stacktrace"])
-    | extend DependencyName   = tostring(Attributes["dependency_name"])
+    | extend DependencyName   = coalesce(tostring(Attributes["dependency_name"]), tostring(Attributes["dependency.name"]))
     | project Timestamp, TraceId, SpanId, CorrelationId, RequestId, UserId, OrderId,
               ExceptionType, ExceptionMessage, StackTrace, DependencyName,
               ServiceName, DeploymentVersion, Pod, Namespace

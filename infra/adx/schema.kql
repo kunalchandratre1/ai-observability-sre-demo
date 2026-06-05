@@ -133,14 +133,28 @@
 ']'
 
 // AppExceptions: derived (update policy) from AppLogs entries with severityText == "ERROR" + exception.* attrs
+// Attribute name notes:
+//   OTel SDK span.record_exception() → "exception.type" / "exception.message" (dot notation)
+//   app dependencies.py log.error()  → "error_type" / "error_message" (underscore notation)
+//   Both forms are captured via coalesce so real app dependency errors appear alongside SDK exceptions.
 .create-or-alter function AppExceptionsExtract() {
     AppLogs
     | where SeverityText in ("ERROR","FATAL")
-    | where isnotempty(tostring(Attributes["exception.type"])) or isnotempty(tostring(Attributes["error.type"]))
-    | extend ExceptionType   = coalesce(tostring(Attributes["exception.type"]), tostring(Attributes["error.type"]))
-    | extend ExceptionMessage= coalesce(tostring(Attributes["exception.message"]), tostring(Attributes["error.message"]))
-    | extend StackTrace      = tostring(Attributes["exception.stacktrace"])
-    | extend DependencyName  = tostring(Attributes["dependency_name"])
+    | where isnotempty(tostring(Attributes["exception.type"]))
+       or isnotempty(tostring(Attributes["error.type"]))
+       or isnotempty(tostring(Attributes["error_type"]))
+    | extend ExceptionType    = coalesce(
+                                    tostring(Attributes["exception.type"]),
+                                    tostring(Attributes["error.type"]),
+                                    tostring(Attributes["error_type"]))
+    | extend ExceptionMessage = coalesce(
+                                    tostring(Attributes["exception.message"]),
+                                    tostring(Attributes["error.message"]),
+                                    tostring(Attributes["error_message"]))
+    | extend StackTrace       = tostring(Attributes["exception.stacktrace"])
+    | extend DependencyName   = coalesce(
+                                    tostring(Attributes["dependency_name"]),
+                                    tostring(Attributes["dependency.name"]))
     | project Timestamp, TraceId, SpanId, CorrelationId, RequestId, UserId, OrderId,
               ExceptionType, ExceptionMessage, StackTrace, DependencyName,
               ServiceName, DeploymentVersion, Pod, Namespace

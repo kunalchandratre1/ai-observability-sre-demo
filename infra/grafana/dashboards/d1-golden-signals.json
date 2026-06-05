@@ -56,7 +56,7 @@
       "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
         "refId": "A", "rawMode": true, "resultFormat": "table",
-        "query": "AppExceptions | where ServiceName == '$service' | where '$correlation_id' == '' or CorrelationId == '$correlation_id' | where '$trace_id' == '' or TraceId == '$trace_id' | top 100 by Timestamp desc | project Timestamp, ExceptionType, ExceptionMessage, DependencyName, CorrelationId, TraceId, Pod, DeploymentVersion"
+        "query": "let spanCtx = AppSpans | where Timestamp > ago(2h) | where isnotempty(TraceId) | summarize DependencyName=take_any(DependencyName), CorrelationId=take_any(CorrelationId) by TraceId; AppExceptions | where ServiceName == '$service' | where '$correlation_id' == '' or CorrelationId == '$correlation_id' | where '$trace_id' == '' or TraceId == '$trace_id' | top 100 by Timestamp desc | join kind=leftouter spanCtx on TraceId | extend DependencyName = coalesce(DependencyName, DependencyName1) | extend CorrelationId = coalesce(CorrelationId, CorrelationId1) | project Timestamp, ExceptionType, ExceptionMessage, DependencyName, CorrelationId, TraceId, Pod, DeploymentVersion"
       }],
       "gridPos": { "x":0, "y":15, "w":24, "h":10 }
     },
