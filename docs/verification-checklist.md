@@ -256,6 +256,7 @@ Set time range to **Last 1 hour**. Refresh all dashboards.
 **Portal:** LAW `aiosre-la-demo` → **Logs**
 
 ### 5.1 — AKS container logs (application stdout)
+> **Run in: Log Analytics workspace `aiosre-la-demo` → Logs** (NOT ADX — `ContainerLog` is a Container Insights table written by the AKS monitoring agent, not by the OTel pipeline).
 ```kql
 ContainerLog
 | where TimeGenerated > ago(30m)
@@ -270,7 +271,7 @@ ContainerLog
 KubePodInventory
 | where TimeGenerated > ago(10m)
 | where Namespace == "app"
-| project TimeGenerated, Name, PodStatus, ContainerStatus, Node
+| project TimeGenerated, Name, PodStatus, ContainerStatus, Computer
 | order by TimeGenerated desc
 ```
 - [ ] `api-service-*` pods visible — `PodStatus` = `Running`
