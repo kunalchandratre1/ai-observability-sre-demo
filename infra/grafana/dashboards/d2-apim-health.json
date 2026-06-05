@@ -18,9 +18,9 @@
       "gridPos":{"x":0,"y":0,"w":12,"h":7}
     },
     {
-      "id":2, "type":"timeseries", "title":"APIM Latency p95 (Azure Monitor)",
+      "id":2, "type":"timeseries", "title":"APIM Latency avg (Azure Monitor)",
       "datasource": { "type":"grafana-azure-monitor-datasource", "uid":"azure-monitor-oob" },
-      "targets": [{ "queryType": "Azure Monitor", "refId": "A", "azureMonitor": { "metricName":"Duration", "aggregation":"P95", "metricNamespace":"Microsoft.ApiManagement/service", "resourceGroup":"ai-obs-sre-demo", "resourceName":"aiosre-apim-demo", "subscription":"ba43c91f-2d76-4000-a7ad-24750cab54c3", "timeGrain":"auto" }}],
+      "targets": [{ "queryType": "Azure Monitor", "refId": "A", "azureMonitor": { "metricName":"Duration", "aggregation":"Average", "metricNamespace":"Microsoft.ApiManagement/service", "resourceGroup":"ai-obs-sre-demo", "resourceName":"aiosre-apim-demo", "subscription":"ba43c91f-2d76-4000-a7ad-24750cab54c3", "timeGrain":"auto" }}],
       "gridPos":{"x":12,"y":0,"w":12,"h":7}
     },
     {

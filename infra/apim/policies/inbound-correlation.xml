@@ -104,10 +104,11 @@
         new JProperty("backendUrl",     context.Api.ServiceUrl.ToString()),
         new JProperty("requestId",      context.RequestId.ToString()),
         new JProperty("correlationId",  context.Variables.ContainsKey("cid") ? (string)context.Variables["cid"] : ""),
-        new JProperty("traceparent",    context.Request.Headers.GetValueOrDefault("traceparent","")),
+        new JProperty("traceparent",    context.Request.Headers.ContainsKey("traceparent") ? context.Request.Headers.GetValueOrDefault("traceparent","") : string.Format("00-{0}-{1}-01", ((string)(context.Variables.ContainsKey("cid") ? context.Variables["cid"] : context.RequestId.ToString())).Replace("-","").PadRight(32,'0').Substring(0,32), context.RequestId.ToString().Replace("-","").Substring(0,16))),
         new JProperty("subscriptionId", context.Subscription?.Id ?? ""),
         new JProperty("clientIp",       context.Request.IpAddress),
         new JProperty("status",         context.Response.StatusCode),
+        new JProperty("backendStatus",  context.Response.StatusCode),
         new JProperty("totalTimeMs",    (DateTime.UtcNow - context.Timestamp).TotalMilliseconds)
       );
       return body.ToString(Newtonsoft.Json.Formatting.None);
