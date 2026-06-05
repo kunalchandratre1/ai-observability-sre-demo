@@ -62,6 +62,8 @@ def _record(span, dep: str, endpoint: str, status_code: Optional[int], started: 
                 "latency_ms": latency_ms,
                 "error_type": type(error).__name__,
                 "error_message": str(error)[:500],
+                "correlation_id": get_correlation_id() or "",
+                "request_id": get_request_id() or "",
             },
         )
     else:
