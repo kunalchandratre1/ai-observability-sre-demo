@@ -298,20 +298,18 @@ Perf
 
 ### 5.5 — Cosmos diagnostic logs
 ```kql
-AzureDiagnostics
+CDBDataPlaneRequests
 | where TimeGenerated > ago(1h)
-| where ResourceProvider == "MICROSOFT.DOCUMENTDB"
-| summarize count() by OperationName, ResultType
+| summarize count() by OperationName, StatusCode
 | order by count_ desc
 ```
 - [ ] Rows present — Cosmos operations visible
-- [ ] `ResultType` = `Success` dominant — no failures at baseline
+- [ ] `StatusCode` = `200` dominant — no failures at baseline
 
 ### 5.6 — Service Bus diagnostic logs
 ```kql
-AzureDiagnostics
+AZMSOperationalLogs
 | where TimeGenerated > ago(1h)
-| where ResourceProvider == "MICROSOFT.SERVICEBUS"
 | summarize count() by OperationName, ResultType
 ```
 - [ ] Rows present — Service Bus operations visible

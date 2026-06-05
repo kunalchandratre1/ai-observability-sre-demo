@@ -101,6 +101,7 @@ resource diag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   scope: cosmos
   properties: {
     workspaceId: logAnalyticsWorkspaceId
+    logAnalyticsDestinationType: 'Dedicated'
     logs: [
       { categoryGroup: 'allLogs', enabled: true }
     ]

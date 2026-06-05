@@ -56,6 +56,7 @@ resource diag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   scope: ns
   properties: {
     workspaceId: logAnalyticsWorkspaceId
+    logAnalyticsDestinationType: 'Dedicated'
     logs: [ { categoryGroup: 'allLogs', enabled: true } ]
     metrics: [ { category: 'AllMetrics', enabled: true } ]
   }
