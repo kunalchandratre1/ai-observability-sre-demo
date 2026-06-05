@@ -81,13 +81,14 @@ def _record(span, dep: str, endpoint: str, status_code: Optional[int], started: 
 # ----------------------- Azure OpenAI (chat) -----------------------
 
 async def call_openai_chat(prompt: str) -> str:
-    if settings.fault_force_openai_down:
-        raise DependencyError("AzureOpenAI", "fault_force_openai_down=true (synthetic outage)")
-
     endpoint = settings.openai_endpoint or "unset"
     with tracer.start_as_current_span("dep.AzureOpenAI") as span:
         stamp_span_with_correlation(span)
         started = time.perf_counter()
+        if settings.fault_force_openai_down:
+            err = DependencyError("AzureOpenAI", "fault_force_openai_down=true (synthetic outage)", 503)
+            _record(span, "AzureOpenAI", endpoint, 503, started, err)
+            raise err
         try:
             credential = DefaultAzureCredential(managed_identity_client_id=settings.azure_client_id or None)
             token = (await credential.get_token("https://cognitiveservices.azure.com/.default")).token
@@ -113,13 +114,14 @@ async def call_openai_chat(prompt: str) -> str:
 # ----------------------- Azure Speech (TTS) -----------------------
 
 async def call_speech_tts(text: str) -> bytes:
-    if settings.fault_force_speech_down:
-        raise DependencyError("AzureSpeech", "fault_force_speech_down=true (synthetic outage)")
-
     endpoint = settings.speech_endpoint or f"https://{settings.speech_region}.tts.speech.microsoft.com"
     with tracer.start_as_current_span("dep.AzureSpeech") as span:
         stamp_span_with_correlation(span)
         started = time.perf_counter()
+        if settings.fault_force_speech_down:
+            err = DependencyError("AzureSpeech", "fault_force_speech_down=true (synthetic outage)", 503)
+            _record(span, "AzureSpeech", endpoint, 503, started, err)
+            raise err
         try:
             credential = DefaultAzureCredential(managed_identity_client_id=settings.azure_client_id or None)
             token = (await credential.get_token("https://cognitiveservices.azure.com/.default")).token
@@ -150,12 +152,14 @@ async def call_speech_tts(text: str) -> bytes:
 # ----------------------- Third-party API -----------------------
 
 async def call_third_party() -> dict:
-    if settings.fault_force_thirdparty_down:
-        raise DependencyError("ThirdPartyAPI", "fault_force_thirdparty_down=true (synthetic outage)")
     url = settings.third_party_api_url
     with tracer.start_as_current_span("dep.ThirdPartyAPI") as span:
         stamp_span_with_correlation(span)
         started = time.perf_counter()
+        if settings.fault_force_thirdparty_down:
+            err = DependencyError("ThirdPartyAPI", "fault_force_thirdparty_down=true (synthetic outage)", 503)
+            _record(span, "ThirdPartyAPI", url, 503, started, err)
+            raise err
         try:
             async with httpx.AsyncClient(timeout=8.0) as client:
                 r = await client.get(url)
