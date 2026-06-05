@@ -60,10 +60,10 @@
       "gridPos": { "x":0, "y":15, "w":24, "h":10 }
     },
     {
-      "id": 6, "type": "stat", "title": "Deployment versions in last hour",
+      "id": 6, "type": "table", "title": "Deployment versions in last hour",
       "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
-        "query": "AppLogs | where ServiceName == '$service' | summarize req=count() by DeploymentVersion | top 10 by req desc"
+        "query": "AppLogs | where Timestamp > ago(1h) | where isnotempty(DeploymentVersion) | summarize log_count = count() by ServiceName, DeploymentVersion | order by ServiceName asc"
       }],
       "gridPos": { "x":0, "y":25, "w":24, "h":4 }
     }
