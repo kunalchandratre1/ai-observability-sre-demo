@@ -62,16 +62,26 @@ Write-Host "  Started        : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Host "============================================================"
 
 # Resolve deployer object ID
+# Try az ad signed-in-user first (works for interactive user login).
+# Fall back to decoding the access token OID claim — works for all auth types
+# (interactive, service principal, managed identity) without requiring Graph permissions.
 Write-Host ""
 Write-Host "[1/3] Resolving deployer identity..."
-$deployerOid = az ad signed-in-user show --query id -o tsv 2>&1
-if ($LASTEXITCODE -ne 0 -or -not $deployerOid) {
-    # Service principal or managed identity context — use service principal OID
-    $deployerOid = az account show --query 'user.assignedIdentityInfo' -o tsv 2>$null
-    if (-not $deployerOid) {
-        Write-Warning "Could not resolve deployer object ID. Key Vault and ADX RBAC assignments may need manual attention."
-        $deployerOid = '00000000-0000-0000-0000-000000000000'
+$deployerOid = az ad signed-in-user show --query id -o tsv 2>$null
+if (-not $deployerOid -or $deployerOid -match '^\s*$') {
+    Write-Host "  az ad signed-in-user not available — decoding OID from access token..."
+    $token = az account get-access-token --query accessToken -o tsv 2>$null
+    if ($token) {
+        $payload = $token.Split('.')[1]
+        # Pad base64 to a multiple of 4
+        $payload = $payload + ('=' * ((4 - $payload.Length % 4) % 4))
+        $claims  = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json
+        $deployerOid = $claims.oid
     }
+}
+if (-not $deployerOid -or $deployerOid -match '^\s*$') {
+    Write-Warning "Could not resolve deployer OID — Key Vault and ADX RBAC assignments may need manual attention."
+    $deployerOid = '00000000-0000-0000-0000-000000000000'
 }
 Write-Host "  Deployer OID: $deployerOid"
 

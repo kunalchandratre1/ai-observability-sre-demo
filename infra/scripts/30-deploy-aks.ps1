@@ -138,7 +138,8 @@ helm version --short 2>&1 | Select-Object -Last 1
 Write-Host ""
 Write-Host "=== [3/8] Getting AKS credentials ==="
 az aks get-credentials -g $rg -n $AKS --overwrite-existing
-$OIDC = az aks show -g $rg -n $AKS --query oidcIssuerProfile.issuerURL -o tsv
+# Note: JMESPath is case-sensitive. The ARM field is 'issuerUrl' (not 'issuerURL').
+$OIDC = az aks show -g $rg -n $AKS --query oidcIssuerProfile.issuerUrl -o tsv
 
 # ── Federated credentials (always up-to-date with current OIDC issuer) ────────
 # Required for workload identity: links the AKS OIDC issuer to the service
@@ -300,8 +301,10 @@ $otelYaml = $otelYaml `
     -replace 'REPLACE_AKS_NAME',   $AKS
 $otelYaml | Set-Content "$TmpDir/otel-collector.yaml" -Encoding UTF8
 
-kubectl apply -f "$TmpDir/otel-collector.yaml"
+# app.yaml must be applied first — it creates the 'app' and 'observability' namespaces.
+# otel-collector.yaml targets namespace 'observability' and will fail with NotFound if applied first.
 kubectl apply -f "$TmpDir/app.yaml"
+kubectl apply -f "$TmpDir/otel-collector.yaml"
 
 # kafka-bridge: HTTP→AMQP proxy forwarding OTLP/JSON from otelcol to Azure Event
 # Hub using azure-eventhub SDK + Workload Identity (DefaultAzureCredential).
