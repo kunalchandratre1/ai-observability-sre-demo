@@ -29,8 +29,8 @@ $grafanaHost = az grafana show -g $rg -n $grafanaName --query properties.endpoin
 $grafanaHost = $grafanaHost.TrimEnd('/')
 
 $adxCluster  = (az kusto cluster list -g $rg -o json | ConvertFrom-Json)[0].name
-$location    = az kusto cluster show -g $rg -n $adxCluster --query location -o tsv
-$adxUri      = "https://$adxCluster.$location.kusto.windows.net"
+# Use the cluster's own URI — avoids location display-name vs slug mismatch ("Australia East" vs "australiaeast")
+$adxUri      = (az kusto cluster show -g $rg -n $adxCluster --query uri -o tsv).TrimEnd('/')
 $adxDb       = 'observability'
 
 $subId       = az account show --query id -o tsv
