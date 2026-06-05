@@ -18,8 +18,8 @@
       "id": 1, "type": "timeseries", "title": "Latency p95 (per dependency, ms)",
       "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
-        "query": "AppSpans | where ServiceName == '$service' | where Name startswith 'dep.' | summarize p95=percentile(DependencyLatencyMs, 95) by bin(Timestamp, 1m), DependencyName | order by Timestamp asc",
-        "resultFormat":"time_series"
+        "refId":"A", "rawMode":true, "resultFormat":"time_series",
+        "query": "AppSpans | where ServiceName == '$service' | where Name startswith 'dep.' | summarize p95=percentile(DependencyLatencyMs, 95) by bin(Timestamp, 1m), DependencyName | order by Timestamp asc"
       }],
       "gridPos": { "x":0, "y":0, "w":12, "h":8 }
     },
@@ -27,8 +27,8 @@
       "id": 2, "type": "timeseries", "title": "Errors per minute (AppExceptions)",
       "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
-        "query": "AppExceptions | where ServiceName == '$service' | summarize errors=count() by bin(Timestamp, 1m), DependencyName | order by Timestamp asc",
-        "resultFormat":"time_series"
+        "refId":"A", "rawMode":true, "resultFormat":"time_series",
+        "query": "AppExceptions | where ServiceName == '$service' | summarize errors=count() by bin(Timestamp, 1m), DependencyName | order by Timestamp asc"
       }],
       "gridPos": { "x":12, "y":0, "w":12, "h":8 }
     },
@@ -36,8 +36,8 @@
       "id": 3, "type": "timeseries", "title": "Traffic (requests/min)",
       "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
-        "query": "AppSpans | where Name == 'POST /api/orders' or Name endswith '/orders' | summarize req=count() by bin(Timestamp, 1m) | order by Timestamp asc",
-        "resultFormat":"time_series"
+        "refId":"A", "rawMode":true, "resultFormat":"time_series",
+        "query": "AppSpans | where Name == 'POST /api/orders' or Name endswith '/orders' | summarize req=count() by bin(Timestamp, 1m) | order by Timestamp asc"
       }],
       "gridPos": { "x":0, "y":8, "w":12, "h":7 }
     },
@@ -55,6 +55,7 @@
       "id": 5, "type": "table", "title": "Top recent exceptions (filterable by correlation_id/trace_id)",
       "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
+        "refId": "A", "rawMode": true, "resultFormat": "table",
         "query": "AppExceptions | where ServiceName == '$service' | where '$correlation_id' == '' or CorrelationId == '$correlation_id' | where '$trace_id' == '' or TraceId == '$trace_id' | top 100 by Timestamp desc | project Timestamp, ExceptionType, ExceptionMessage, DependencyName, CorrelationId, TraceId, Pod, DeploymentVersion"
       }],
       "gridPos": { "x":0, "y":15, "w":24, "h":10 }
@@ -63,6 +64,7 @@
       "id": 6, "type": "table", "title": "Deployment versions in last hour",
       "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
+        "refId": "A", "rawMode": true, "resultFormat": "table",
         "query": "AppLogs | where Timestamp > ago(1h) | where isnotempty(DeploymentVersion) | summarize log_count = count() by ServiceName, DeploymentVersion | order by ServiceName asc"
       }],
       "gridPos": { "x":0, "y":25, "w":24, "h":4 }

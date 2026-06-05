@@ -6,23 +6,23 @@
   "panels":[
     { "id":1, "type":"timeseries", "title":"OpenAI latency p50/p95 (ms)",
       "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"{{ADX_DS_UID}}"},
-      "targets":[{"query":"AppSpans | where DependencyName == 'AzureOpenAI' | summarize p50=percentile(DependencyLatencyMs,50), p95=percentile(DependencyLatencyMs,95) by bin(Timestamp,1m) | order by Timestamp asc"}],
+      "targets":[{"refId":"A","rawMode":true,"resultFormat":"time_series","query":"AppSpans | where DependencyName == 'AzureOpenAI' | summarize p50=percentile(DependencyLatencyMs,50), p95=percentile(DependencyLatencyMs,95) by bin(Timestamp,1m) | order by Timestamp asc"}],
       "gridPos":{"x":0,"y":0,"w":12,"h":7}},
     { "id":2, "type":"timeseries", "title":"OpenAI errors/min (by ErrorType)",
       "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"{{ADX_DS_UID}}"},
-      "targets":[{"query":"AppExceptions | where DependencyName == 'AzureOpenAI' | summarize c=count() by bin(Timestamp,1m), ExceptionType | order by Timestamp asc"}],
+      "targets":[{"refId":"A","rawMode":true,"resultFormat":"time_series","query":"AppExceptions | where DependencyName == 'AzureOpenAI' | summarize c=count() by bin(Timestamp,1m), ExceptionType | order by Timestamp asc"}],
       "gridPos":{"x":12,"y":0,"w":12,"h":7}},
     { "id":3, "type":"timeseries", "title":"Speech latency p95 (ms)",
       "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"{{ADX_DS_UID}}"},
-      "targets":[{"query":"AppSpans | where DependencyName == 'AzureSpeech' | summarize p95=percentile(DependencyLatencyMs,95) by bin(Timestamp,1m) | order by Timestamp asc"}],
+      "targets":[{"refId":"A","rawMode":true,"resultFormat":"time_series","query":"AppSpans | where DependencyName == 'AzureSpeech' | summarize p95=percentile(DependencyLatencyMs,95) by bin(Timestamp,1m) | order by Timestamp asc"}],
       "gridPos":{"x":0,"y":7,"w":12,"h":7}},
     { "id":4, "type":"timeseries", "title":"Speech errors/min",
       "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"{{ADX_DS_UID}}"},
-      "targets":[{"query":"AppExceptions | where DependencyName == 'AzureSpeech' | summarize c=count() by bin(Timestamp,1m), ExceptionType | order by Timestamp asc"}],
+      "targets":[{"refId":"A","rawMode":true,"resultFormat":"time_series","query":"AppExceptions | where DependencyName == 'AzureSpeech' | summarize c=count() by bin(Timestamp,1m), ExceptionType | order by Timestamp asc"}],
       "gridPos":{"x":12,"y":7,"w":12,"h":7}},
     { "id":5, "type":"table", "title":"Recent AI-dep failures (correlation_id, status_code)",
       "datasource":{"type":"grafana-azure-data-explorer-datasource","uid":"{{ADX_DS_UID}}"},
-      "targets":[{"query":"AppSpans | where DependencyName in ('AzureOpenAI','AzureSpeech') | where DependencyStatusCode >= 400 or isnotempty(ErrorType) | top 100 by Timestamp desc | project Timestamp, DependencyName, DependencyStatusCode, DependencyLatencyMs, ErrorType, ErrorMessage, CorrelationId, TraceId, Pod"}],
+      "targets":[{"refId":"A","rawMode":true,"resultFormat":"table","query":"AppSpans | where DependencyName in ('AzureOpenAI','AzureSpeech') | where DependencyStatusCode >= 400 or isnotempty(ErrorType) | top 100 by Timestamp desc | project Timestamp, DependencyName, DependencyStatusCode, DependencyLatencyMs, ErrorType, ErrorMessage, CorrelationId, TraceId, Pod"}],
       "gridPos":{"x":0,"y":14,"w":24,"h":10}}
   ]
 }
