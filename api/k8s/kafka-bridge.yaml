@@ -205,11 +205,15 @@ spec:
           command:
             - pip
             - install
-            - -q
-            - flask
-            - azure-eventhub
-            - azure-identity
+            - --no-cache-dir
+            - --quiet
             - --target=/packages
+            # Pin versions so every cluster deploy installs identical packages.
+            # Unversioned installs can break silently when upstream releases a
+            # package with an incompatible dependency on the day of deployment.
+            - flask==3.1.1
+            - azure-eventhub==5.14.0
+            - azure-identity==1.23.0
           volumeMounts:
             - name: packages
               mountPath: /packages

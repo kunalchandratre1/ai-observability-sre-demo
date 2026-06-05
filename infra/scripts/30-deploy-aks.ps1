@@ -21,6 +21,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Resolve the script directory early — used in [5/8] for helm values and [7/8] for K8s manifests.
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
 Write-Host ""
 Write-Host "=== [0/8] Resolving Azure resource values ==="
 
@@ -137,39 +140,57 @@ Write-Host "=== [3/8] Getting AKS credentials ==="
 az aks get-credentials -g $rg -n $AKS --overwrite-existing
 $OIDC = az aks show -g $rg -n $AKS --query oidcIssuerProfile.issuerURL -o tsv
 
-# ── Federated credential (idempotent) ────────────────────────────────────────
-# Required for workload identity: links the AKS OIDC issuer to the app-sa
-# service account so pods can get Azure AD tokens via DefaultAzureCredential.
+# ── Federated credentials (always up-to-date with current OIDC issuer) ────────
+# Required for workload identity: links the AKS OIDC issuer to the service
+# accounts so pods can get Azure AD tokens via DefaultAzureCredential.
+#
+# CRITICAL on cluster delete+recreate: AKS generates a NEW OIDC issuer URL each
+# time the cluster is created. A federated credential that references the OLD issuer
+# URL silently stops working — DefaultAzureCredential returns 401 on every Azure
+# SDK call. We therefore always compare the stored issuer against the current
+# cluster issuer and DELETE + RECREATE the credential if they differ.
 Write-Host ""
 Write-Host "=== [4/8] Federated credentials for workload identity ==="
+Write-Host "  Current OIDC issuer: $OIDC"
+
+function Set-FederatedCredential {
+    param(
+        [string]$Name,
+        [string]$Subject,
+        [string]$Rg,
+        [string]$UamiName,
+        [string]$OidcIssuer
+    )
+    $existing = az identity federated-credential list `
+        -g $Rg --identity-name $UamiName `
+        --query "[?name=='$Name'].{name:name,issuer:issuer}" -o json 2>$null | ConvertFrom-Json
+    if ($existing -and $existing.Count -gt 0) {
+        if ($existing[0].issuer -eq $OidcIssuer) {
+            Write-Host "  '$Name': issuer matches current cluster — no change."
+            return
+        }
+        # OIDC issuer changed (cluster was recreated) — delete stale credential and recreate.
+        Write-Host "  '$Name': issuer mismatch (stored=$($existing[0].issuer)) — deleting stale credential..."
+        az identity federated-credential delete -g $Rg --identity-name $UamiName --name $Name --yes 2>&1 | Out-Null
+    }
+    Write-Host "  '$Name': creating for subject '$Subject'..."
+    az identity federated-credential create `
+        --name $Name --identity-name $UamiName -g $Rg `
+        --issuer $OidcIssuer `
+        --subject $Subject `
+        --audiences 'api://AzureADTokenExchange' | Out-Null
+    Write-Host "  '$Name': created." -ForegroundColor Green
+}
+
 # app-sa: used by api-service and worker-service (namespace: app)
-$existingFc = az identity federated-credential list `
-    -g $rg --identity-name $UAMI `
-    --query "[?subject=='system:serviceaccount:app:app-sa'].name" -o tsv 2>$null
-if ($existingFc) {
-    Write-Host "  Federated credential '$existingFc' already exists — skipping."
-} else {
-    az identity federated-credential create `
-      --name 'fc-app-sa' --identity-name $UAMI -g $rg `
-      --issuer $OIDC `
-      --subject 'system:serviceaccount:app:app-sa' `
-      --audiences 'api://AzureADTokenExchange' | Out-Null
-    Write-Host "  Federated credential 'fc-app-sa' created."
-}
+Set-FederatedCredential -Name 'fc-app-sa' `
+    -Subject 'system:serviceaccount:app:app-sa' `
+    -Rg $rg -UamiName $UAMI -OidcIssuer $OIDC
+
 # bridge-sa: used by kafka-bridge (namespace: observability)
-$existingBridgeFc = az identity federated-credential list `
-    -g $rg --identity-name $UAMI `
-    --query "[?subject=='system:serviceaccount:observability:bridge-sa'].name" -o tsv 2>$null
-if ($existingBridgeFc) {
-    Write-Host "  Federated credential '$existingBridgeFc' already exists — skipping."
-} else {
-    az identity federated-credential create `
-      --name 'bridge-sa-federated' --identity-name $UAMI -g $rg `
-      --issuer $OIDC `
-      --subject 'system:serviceaccount:observability:bridge-sa' `
-      --audiences 'api://AzureADTokenExchange' | Out-Null
-    Write-Host "  Federated credential 'bridge-sa-federated' created."
-}
+Set-FederatedCredential -Name 'bridge-sa-federated' `
+    -Subject 'system:serviceaccount:observability:bridge-sa' `
+    -Rg $rg -UamiName $UAMI -OidcIssuer $OIDC
 
 # ── nginx-ingress (internal ILB) ──────────────────────────────────────────────
 Write-Host ""
@@ -177,18 +198,25 @@ Write-Host "=== [5/8] Installing nginx-ingress (internal ILB) ==="
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx --force-update 2>&1 | Select-Object -Last 2
 helm repo update 2>&1 | Select-Object -Last 2
 
-$helmExists = helm list -n ingress-basic --short 2>$null | Select-String 'ingress-nginx'
-if ($helmExists) {
-    Write-Host "nginx-ingress already installed — skipping"
-} else {
-    helm install ingress-nginx ingress-nginx/ingress-nginx `
-      --namespace ingress-basic --create-namespace `
-      --set controller.replicaCount=2 `
-      --set "controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-internal=true" `
-      --set controller.metrics.enabled=true `
-      --set "controller.podAnnotations.prometheus\.io/scrape=true" `
-      --set "controller.podAnnotations.prometheus\.io/port=10254" 2>&1 | Select-Object -Last 5
+# All service configuration (ILB IP, externalTrafficPolicy, healthCheckNodePort,
+# nodePorts, annotations) lives in nginx-ilb-values.yaml and is applied via
+# --values on every helm install/upgrade. Helm owns the service entirely —
+# no separate kubectl apply is needed or safe (would cause SSA field-manager conflicts).
+#
+# ILB HEALTH PROBE: externalTrafficPolicy: Local causes kube-proxy to create a
+# healthCheckNodePort (32500). kube-proxy returns HTTP 200/503 based on whether
+# nginx pods are local. CCM reads healthCheckNodePort from the service spec and
+# uses it as the ILB probe target — it never overrides a healthCheckNodePort probe,
+# making this stable across cluster stop/start without any post-deploy REST API calls.
+$NginxValuesFile = Join-Path $ScriptDir "nginx-ilb-values.yaml"
+if (-not (Test-Path $NginxValuesFile)) {
+    throw "nginx-ilb-values.yaml not found at $NginxValuesFile — cannot deploy nginx ingress."
 }
+
+helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx `
+    --namespace ingress-basic --create-namespace `
+    --values $NginxValuesFile `
+    --wait --timeout 5m 2>&1 | Select-Object -Last 8
 
 Write-Host "Waiting for ingress controller to get an internal IP (up to 5 min)..."
 $INGRESS_IP = ""
@@ -247,7 +275,6 @@ if ($existingEhRole) {
 Write-Host ""
 Write-Host "=== [7/8] Patching and applying K8s manifests ==="
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot  = (Resolve-Path (Join-Path $ScriptDir '../..')).Path
 $K8sDir    = Join-Path $RepoRoot 'api/k8s'
 $TmpDir    = Join-Path $env:TEMP "aks-deploy-$(Get-Date -Format yyyyMMddHHmmss)"

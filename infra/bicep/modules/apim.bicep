@@ -85,6 +85,7 @@ resource diag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   scope: apim
   properties: {
     workspaceId: logAnalyticsWorkspaceId
+    logAnalyticsDestinationType: 'Dedicated'  // Resource specific — sends to ApiManagementGatewayLogs (not AzureDiagnostics)
     logs: [ { categoryGroup: 'allLogs', enabled: true } ]
     metrics: [ { category: 'AllMetrics', enabled: true } ]
   }

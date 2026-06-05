@@ -1,0 +1,54 @@
+# nginx-ilb-service.yaml
+# SUPERSEDED — kept for reference only. Not applied by 30-deploy-aks.ps1.
+#
+# All service configuration (externalTrafficPolicy, healthCheckNodePort, loadBalancerIP,
+# nodePorts, annotations) now lives in nginx-ilb-values.yaml and is applied by helm
+# upgrade --install via --values. Helm owns the service entirely; applying this file
+# separately would cause Server-Side Apply field-manager conflicts.
+#
+# ILB HEALTH PROBE FIX (why we moved to externalTrafficPolicy: Local):
+#   AKS CCM 1.34 hardcodes probe protocol to Http/Https for frontend ports 80/443
+#   on every reconcile, ignoring azure-load-balancer-health-probe-protocol annotation.
+#   With externalTrafficPolicy: Local + healthCheckNodePort: 32500, kube-proxy owns
+#   the healthz endpoint — CCM only reads the port number from the service spec and
+#   never overrides the probe, making it stable across cluster stop/start.
+#
+#   Using a separate kubectl-applied manifest (instead of helm --set) avoids:
+#   1. Helm --set treating dots in annotation keys as nested path separators (corrupting keys)
+#   2. Helm SSA ownership conflicts when kubectl previously owned the annotation field
+#
+# FIXED IP:
+#   loadBalancerIP is pinned to 10.40.0.91 so the APIM backend URL never needs to change.
+#   This IP is in snet-aks (10.40.0.0/22) and was originally assigned by CCM on first deploy.
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-basic
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/component: controller
+  annotations:
+    # Internal Azure Load Balancer (no public IP)
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    # TCP health probe — prevents ILB HTTP GET / → nginx 404 → all backends unhealthy → APIM 500
+    service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol: "tcp"
+spec:
+  type: LoadBalancer
+  loadBalancerIP: "10.40.0.91"
+  externalTrafficPolicy: Cluster
+  selector:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/component: controller
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: http
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: https

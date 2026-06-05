@@ -56,10 +56,11 @@ Write-Host "  APIM instance : $apimName"
 # ── Check if already injected ─────────────────────────────────────────────────
 $apimJson = az apim show -g $rg -n $apimName -o json | ConvertFrom-Json
 $currentVnetType = $apimJson.virtualNetworkType
-$currentPrivateIPs = $apimJson.privateIpAddresses
+$currentSubnet   = $apimJson.virtualNetworkConfiguration?.subnetResourceId
 
-if ($currentVnetType -eq 'External' -and $currentPrivateIPs) {
-    Write-Host "  APIM is already VNet-injected (External, privateIPs=$($currentPrivateIPs -join ',')). Nothing to do." -ForegroundColor Green
+# External mode does NOT populate privateIpAddresses — success is subnet being set
+if ($currentVnetType -eq 'External' -and $currentSubnet) {
+    Write-Host "  APIM is already VNet-injected (External mode, subnet=$currentSubnet). Nothing to do." -ForegroundColor Green
     exit 0
 }
 
@@ -89,21 +90,40 @@ if (-not $nsgId) {
 
     $existingRules = az network nsg rule list -g $rg --nsg-name $nsgName -o json | ConvertFrom-Json
 
-    # Required inbound rules for APIM VNet injection
+    # Required rules per https://learn.microsoft.com/en-us/azure/api-management/api-management-using-with-vnet (External mode)
     $required = @(
-        @{ name='Allow-APIM-Management';    priority=100; dir='Inbound';  src='ApiManagement';      port='3443'; access='Allow' },
-        @{ name='Allow-HTTPS-Inbound';      priority=110; dir='Inbound';  src='Internet';           port='443';  access='Allow' },
-        @{ name='Allow-AzureLoadBalancer';  priority=120; dir='Inbound';  src='AzureLoadBalancer';  port='6390'; access='Allow' },
-        @{ name='Allow-Storage-Outbound';   priority=100; dir='Outbound'; dest='Storage';           port='443';  access='Allow' },
-        @{ name='Allow-SQL-Outbound';       priority=110; dir='Outbound'; dest='Sql';               port='1433'; access='Allow' },
-        @{ name='Allow-KeyVault-Outbound';  priority=120; dir='Outbound'; dest='AzureKeyVault';     port='443';  access='Allow' },
-        @{ name='Allow-EventHub-Outbound';  priority=130; dir='Outbound'; dest='EventHub';          port='5671'; access='Allow' },
-        @{ name='Allow-EventHub-5672';      priority=131; dir='Outbound'; dest='EventHub';          port='5672'; access='Allow' },
-        @{ name='Allow-Monitor-Outbound';   priority=132; dir='Outbound'; dest='AzureMonitor';      port='1886'; access='Allow' }
+        # ── Inbound ──────────────────────────────────────────────────────────────
+        @{ name='Allow-APIM-Management';         priority=100; dir='Inbound';  src='ApiManagement';       port='3443'; access='Allow' },
+        @{ name='Allow-HTTP-Inbound';            priority=105; dir='Inbound';  src='Internet';            port='80';   access='Allow' },  # HTTP client access (External)
+        @{ name='Allow-HTTPS-Inbound';           priority=110; dir='Inbound';  src='Internet';            port='443';  access='Allow' },  # HTTPS client access
+        @{ name='Allow-AzureLoadBalancer';       priority=120; dir='Inbound';  src='AzureLoadBalancer';   port='6390'; access='Allow' },  # Azure infra LB
+        @{ name='Allow-TrafficManager-Inbound';  priority=125; dir='Inbound';  src='AzureTrafficManager'; port='443';  access='Allow' },  # Traffic Manager (multi-region)
+        # ── Outbound ─────────────────────────────────────────────────────────────
+        @{ name='Allow-Storage-Outbound';        priority=100; dir='Outbound'; dest='Storage';            port='443';  access='Allow' },  # Core service dependency
+        @{ name='Allow-SQL-Outbound';            priority=110; dir='Outbound'; dest='Sql';                port='1433'; access='Allow' },  # Core service dependency
+        @{ name='Allow-KeyVault-Outbound';       priority=120; dir='Outbound'; dest='AzureKeyVault';      port='443';  access='Allow' },  # Core service dependency
+        @{ name='Allow-EventHub-Outbound';       priority=130; dir='Outbound'; dest='EventHub';           port='5671'; access='Allow' },  # AMQP
+        @{ name='Allow-EventHub-5672-Outbound';  priority=131; dir='Outbound'; dest='EventHub';           port='5672'; access='Allow' },  # AMQP alternate port
+        @{ name='Allow-Monitor-1886-Outbound';   priority=132; dir='Outbound'; dest='AzureMonitor';       port='1886'; access='Allow' },  # Diagnostics & metrics
+        @{ name='Allow-Monitor-443-Outbound';    priority=133; dir='Outbound'; dest='AzureMonitor';       port='443';  access='Allow' },  # Resource Health & App Insights
+        @{ name='Allow-CertValidation-Outbound'; priority=134; dir='Outbound'; dest='Internet';           port='80';   access='Allow' },  # MS & customer cert validation
+        @{ name='Allow-HTTP-Backend-Outbound';   priority=140; dir='Outbound'; dest='VirtualNetwork';     port='80';   access='Allow' }   # APIM → AKS internal ingress
     )
 
     foreach ($rule in $required) {
         $existing = $existingRules | Where-Object { $_.name -eq $rule.name }
+        if (-not $existing) {
+            # Handle legacy name: Allow-Monitor-Outbound was renamed to Allow-Monitor-1886-Outbound
+            if ($rule.name -eq 'Allow-Monitor-1886-Outbound') {
+                $legacy = $existingRules | Where-Object { $_.name -eq 'Allow-Monitor-Outbound' }
+                if ($legacy) {
+                    Write-Host "  [~] Renaming legacy 'Allow-Monitor-Outbound' -> 'Allow-Monitor-1886-Outbound'..."
+                    az network nsg rule update -g $rg --nsg-name $nsgName --name 'Allow-Monitor-Outbound' --new-rule-name 'Allow-Monitor-1886-Outbound' --output none
+                    Write-Host "  [OK] Renamed to 'Allow-Monitor-1886-Outbound'"
+                    continue
+                }
+            }
+        }
         if ($existing) {
             Write-Host "  [OK] Rule '$($rule.name)' exists"
         } else {
@@ -184,25 +204,31 @@ $lastState = ''
 
 while ((Get-Date) -lt $deadline) {
     Start-Sleep 60
-    $state = az apim show -g $rg -n $apimName --query "{ps:provisioningState, vt:virtualNetworkType, pips:privateIpAddresses}" -o json 2>$null | ConvertFrom-Json
-    $ps    = $state.ps
-    $vt    = $state.vt
-    $pips  = $state.pips
+    # NOTE: External VNet mode does NOT populate privateIpAddresses — that is Internal mode only.
+    # Success is indicated by provisioningState=Succeeded + vnetType=External + subnet set.
+    $state  = az apim show -g $rg -n $apimName --query "{ps:provisioningState, vt:virtualNetworkType, subnet:virtualNetworkConfiguration.subnetResourceId, pubIps:publicIpAddresses}" -o json 2>$null | ConvertFrom-Json
+    $ps     = $state.ps
+    $vt     = $state.vt
+    $subnet = $state.subnet
+    $pubIps = $state.pubIps
 
     if ($ps -ne $lastState) {
-        Write-Host "  $(Get-Date -Format 'HH:mm:ss')  provisioningState=$ps  vnetType=$vt  privateIPs=$($pips -join ',')"
+        Write-Host "  $(Get-Date -Format 'HH:mm:ss')  provisioningState=$ps  vnetType=$vt  subnet=$(if ($subnet) { 'set' } else { 'null' })  publicIPs=$($pubIps -join ',')"
         $lastState = $ps
     }
 
-    if ($ps -eq 'Succeeded' -and $vt -eq 'External' -and $pips) {
+    # External mode: success = Succeeded + External + subnet resource ID is populated
+    if ($ps -eq 'Succeeded' -and $vt -eq 'External' -and $subnet) {
         Write-Host ""
         Write-Host "============================================================" -ForegroundColor Green
         Write-Host "  APIM VNet injection SUCCEEDED!" -ForegroundColor Green
-        Write-Host "  vnetType   = External" -ForegroundColor Green
-        Write-Host "  privateIPs = $($pips -join ', ')" -ForegroundColor Green
+        Write-Host "  vnetType   = External (privateIpAddresses is null by design)" -ForegroundColor Green
+        Write-Host "  subnet     = $subnet" -ForegroundColor Green
+        Write-Host "  publicIPs  = $($pubIps -join ', ')" -ForegroundColor Green
         Write-Host "============================================================" -ForegroundColor Green
         Write-Host ""
         Write-Host "  APIM gateway URL  : $($apimJson.gatewayUrl)"
+        Write-Host "  Backend calls use private DIPs from snet-apim (10.40.5.0/24)"
         exit 0
     }
 

@@ -27,7 +27,7 @@ resource aks 'Microsoft.ContainerService/managedClusters@2024-09-01' = {
     }
     networkProfile: {
       networkPlugin: 'azure'
-      networkPolicy: 'azure'
+      networkPolicy: 'calico'
       serviceCidr: '172.16.0.0/16'
       dnsServiceIP: '172.16.0.10'
     }

@@ -37,6 +37,19 @@ resource apimNsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
         }
       }
       {
+        name: 'Allow-HTTP-Inbound'
+        properties: {
+          priority: 105
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Inbound'
+          sourceAddressPrefix: 'Internet'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '80'       // HTTP client access (External mode)
+        }
+      }
+      {
         name: 'Allow-HTTPS-Inbound'
         properties: {
           priority: 110
@@ -60,6 +73,19 @@ resource apimNsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
           sourcePortRange: '*'
           destinationAddressPrefix: 'VirtualNetwork'
           destinationPortRange: '6390'
+        }
+      }
+      {
+        name: 'Allow-TrafficManager-Inbound'
+        properties: {
+          priority: 125
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Inbound'
+          sourceAddressPrefix: 'AzureTrafficManager'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '443'      // Multi-region routing (External mode)
         }
       }
       {
@@ -112,6 +138,71 @@ resource apimNsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
           sourcePortRange: '*'
           destinationAddressPrefix: 'EventHub'
           destinationPortRange: '5671'
+        }
+      }
+      {
+        name: 'Allow-EventHub-5672-Outbound'
+        properties: {
+          priority: 131
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'EventHub'
+          destinationPortRange: '5672'         // AMQP alternate port
+        }
+      }
+      {
+        name: 'Allow-Monitor-1886-Outbound'
+        properties: {
+          priority: 132
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'AzureMonitor'
+          destinationPortRange: '1886'         // Diagnostics, logs & metrics
+        }
+      }
+      {
+        name: 'Allow-Monitor-443-Outbound'
+        properties: {
+          priority: 133
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'AzureMonitor'
+          destinationPortRange: '443'          // Resource Health & App Insights
+        }
+      }
+      {
+        name: 'Allow-CertValidation-Outbound'
+        properties: {
+          priority: 134
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'Internet'
+          destinationPortRange: '80'           // Certificate validation (MS-managed & customer certs)
+        }
+      }
+      {
+        name: 'Allow-HTTP-Backend-Outbound'
+        properties: {
+          priority: 140
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '80'           // APIM → AKS internal ingress backend
         }
       }
     ]

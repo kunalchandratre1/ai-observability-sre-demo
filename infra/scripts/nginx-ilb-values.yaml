@@ -1,0 +1,45 @@
+# nginx-ingress helm values for Azure Internal Load Balancer (ILB).
+#
+# ILB HEALTH PROBE — permanent fix:
+#   AKS CCM (cloud-controller-manager) hardcodes the probe protocol to Http/Https
+#   for LB frontend ports 80/443 on every reconcile loop, ignoring the
+#   azure-load-balancer-health-probe-protocol annotation.
+#
+#   Fix: externalTrafficPolicy: Local
+#   When Local is set, kube-proxy creates a dedicated healthCheckNodePort (32500).
+#   kube-proxy owns and manages the HTTP /healthz endpoint on that port:
+#     - Returns HTTP 200 while nginx pods are running on the node.
+#     - Returns HTTP 503 when no local nginx pods are present.
+#   CCM reads healthCheckNodePort from the service spec and uses it as the
+#   ILB probe port. CCM never overwrites a healthCheckNodePort probe — it is
+#   stable across cluster stop/start, node pool scaling, and helm upgrades.
+#
+#   Reference: https://kubernetes.io/docs/tutorials/services/source-ip/
+#   Reference: https://learn.microsoft.com/azure/aks/internal-lb
+
+controller:
+  replicaCount: 2
+  metrics:
+    enabled: true
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "10254"
+  service:
+    enabled: true
+    type: LoadBalancer
+    # Fixed private IP — APIM backend URL never changes after service recreation.
+    loadBalancerIP: "10.40.0.91"
+    # Local policy: ILB routes only to nodes running nginx pods.
+    # Enables kube-proxy-managed healthCheckNodePort for the ILB probe (see above).
+    externalTrafficPolicy: Local
+    # Pin the healthCheckNodePort so the probe target never drifts.
+    # CCM reads this field from the service spec and sets the ILB probe to this port.
+    healthCheckNodePort: 32500
+    # Pin nodePorts so CCM never needs to update LB rule backend ports.
+    # A port change triggers CCM reconcile which could recreate probes.
+    nodePorts:
+      http: 32080
+      https: 32443
+    annotations:
+      # Internal Azure Load Balancer — routes to snet-aks private IP 10.40.0.91.
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"

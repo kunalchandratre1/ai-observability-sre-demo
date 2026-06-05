@@ -39,6 +39,7 @@ flowchart LR
 
   ADX --> SRE[Azure SRE Agent<br/>ADX connector + Kusto tools]
   AM --> SRE
+  LA --> SRE
   GitHub[GitHub repo] --> SRE
   SRE --> IncCosmos[(Cosmos: IncidentHistory)]
 ```

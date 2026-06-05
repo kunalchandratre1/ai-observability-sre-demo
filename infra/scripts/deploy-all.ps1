@@ -152,7 +152,7 @@ Write-Host "============================================================"
 Write-Host "  AI Observability SRE Demo — Full Deployment"
 Write-Host "  ResourceGroup : $ResourceGroup"
 Write-Host "  Image Tag     : $Tag"
-Write-Host "  APIM VNet Inj : $(if ($SkipApimVnetInject) { 'SKIP (-SkipApimVnetInject)' } else { 'YES (30-45 min first run)' })"
+Write-Host "  APIM VNet Inj : $(if ($SkipApimVnetInject) { 'SKIP (-SkipApimVnetInject)' } else { 'YES — Step 0.5 (30-45 min, required for APIM->AKS routing)' })"
 Write-Host "  Started       : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC"
 Write-Host "============================================================"
 

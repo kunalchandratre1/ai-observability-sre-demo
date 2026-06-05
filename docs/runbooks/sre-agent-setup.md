@@ -49,17 +49,25 @@ Navigate to **https://sre.azure.com/?create=true** and fill in:
 
 Click **Review + Create → Deploy**.
 
-> **Important — SRE Agent auto-creates its own UAMI.** The portal creates a new managed identity named `aiosre-sre-agent-demo-<suffix>` (e.g. `aiosre-sre-agent-demo-dgkedbpaifx6o`). This is **different** from `aiosre-sre-uami-demo` which was pre-provisioned by Bicep. You must grant ADX access to this new identity before the connector test will pass (see step 2 below).
+> **Important — SRE Agent auto-creates its own UAMI.** The portal creates a new managed identity named `aiosre-sre-agent-demo-<suffix>`. This is **different** from `aiosre-sre-uami-demo` which was pre-provisioned by Bicep. You must grant ADX access to this new identity before the connector test will pass (see step 2 below).
 
-## 2. Grant ADX access to the SRE Agent identity
+**Actual identity created (this deployment):**
+
+| Field | Value |
+|---|---|
+| Identity name | `aiosre-sre-agent-demo-dgkedbpaifx6o` |
+| Principal ID | `d4d62be8-7ebe-45f3-b400-b21ffa2c5869` |
+| Client ID | `811680b3-80da-4ede-9524-9bebf18dca2d` |
+
+## 2. Grant RBAC to the SRE Agent identity
 
 After the agent is deployed, find the auto-created identity name from the portal (SRE Agent → **Overview** → Managed identity) and run:
 
 ```powershell
 # Replace <suffix> with the actual suffix shown in the portal
-$sreAgentIdentityName = "aiosre-sre-agent-demo-<suffix>"
-$principalId = az identity show -g ai-obs-sre-demo -n $sreAgentIdentityName --query principalId -o tsv
+$principalId = az identity show -g ai-obs-sre-demo -n "aiosre-sre-agent-demo-<suffix>" --query principalId -o tsv
 
+# 1) ADX Viewer on observability database
 az kusto database-principal-assignment create `
   -g ai-obs-sre-demo `
   --cluster-name aiosreadxdemo4lrdqw `
@@ -68,15 +76,25 @@ az kusto database-principal-assignment create `
   --principal-id $principalId `
   --principal-type App `
   --role Viewer
-```
 
-Also grant Reader + Monitoring Reader on the RG:
-
-```powershell
+# 2) Reader + Monitoring Reader on the resource group
 $rgId = az group show -n ai-obs-sre-demo --query id -o tsv
-az role assignment create --assignee $principalId --role "Reader"            --scope $rgId
-az role assignment create --assignee $principalId --role "Monitoring Reader" --scope $rgId
+az role assignment create --assignee $principalId --role "Reader"             --scope $rgId
+az role assignment create --assignee $principalId --role "Monitoring Reader"  --scope $rgId
+
+# 3) Log Analytics Reader on the LAW workspace
+az role assignment create --assignee $principalId --role "Log Analytics Reader" `
+  --scope "/subscriptions/ba43c91f-2d76-4000-a7ad-24750cab54c3/resourceGroups/ai-obs-sre-demo/providers/Microsoft.OperationalInsights/workspaces/aiosre-la-demo"
 ```
+
+**Verified grants for this deployment (`d4d62be8-7ebe-45f3-b400-b21ffa2c5869`):**
+
+| Role | Scope |
+|---|---|
+| ADX Database Viewer | `observability` database |
+| Reader | `ai-obs-sre-demo` resource group |
+| Monitoring Reader | `ai-obs-sre-demo` resource group |
+| Log Analytics Reader | `aiosre-la-demo` workspace |
 
 ## 3. Connector: Azure Data Explorer (Logs — Plane 1 + Plane 3b)
 
@@ -85,7 +103,7 @@ This connector covers:
 - **Plane 3b — APIM diagnostics**: `APIMGatewayLogs` (APIM log-to-eventhub → Event Hub → ADX)
 
 Steps:
-1. SRE Agent portal → **Full setup** → **Logs** → `+` → **Azure Data Explorer**
+1. SRE Agent portal → **Builder** (left nav) → **Connectors** → **+ Add connector** → **Azure Data Explorer**
 2. Fill in:
 
 | Field | Value |
@@ -93,11 +111,13 @@ Steps:
 | Connector name | `sredemo-kusto-client` |
 | Cluster URI | `https://aiosreadxdemo4lrdqw.australiaeast.kusto.windows.net` |
 | Database | `observability` |
-| Auth | Managed Identity → `aiosre-sre-agent-demo-<suffix>` |
+| Auth | Managed Identity → `aiosre-sre-agent-demo-dgkedbpaifx6o` |
 | Allow query tools | ✅ checked |
 
-3. Click **Test connection** — must pass (step 2 grants granted ADX Viewer)
+3. Click **Test connection** — must pass (ADX Viewer granted in step 2)
 4. Click **Save**
+
+**Status (this deployment): ✅ Connected**
 
 ## 4. Connector: Azure Monitor (Azure resources — Plane 3a + Plane 4 metrics)
 
@@ -105,23 +125,21 @@ This connector covers Azure Monitor **platform metrics** accessible via the ARM 
 - **Plane 3a — APIM platform metrics**: request rate, latency, 4xx/5xx
 - **Plane 4 — PaaS metrics**: Cosmos DB RU/s, Service Bus queue depth, Redis evictions, Key Vault latency
 
-> **AKS pod/node metrics are NOT in this connector.** Container Insights writes AKS platform data to Log Analytics (section 5 below) where the agent queries `KubePodInventory`, `KubeNodeInventory`, and `ContainerLog` tables via KQL.
+> **AKS pod/node metrics are NOT in this connector.** Container Insights writes AKS platform data to Log Analytics (section 6 below).
 >
 > **Managed Prometheus (AMW) is NOT supported as an SRE Agent connector.** Prometheus is for Grafana PromQL dashboards only.
 
 Steps:
-1. SRE Agent portal → **Full setup** → **Azure resources** → `+`
+1. SRE Agent portal → **Builder** → **Connectors** → **+ Add connector** → **Azure Monitor**
 2. Fill in:
 
 | Field | Value |
 |---|---|
 | Scope | Resource Group `ai-obs-sre-demo` |
-| Auth | Managed Identity → `aiosre-sre-agent-demo-<suffix>` |
+| Auth | Managed Identity → `aiosre-sre-agent-demo-dgkedbpaifx6o` |
 
 3. Click **Test connection** — must pass (`Monitoring Reader` already granted in step 2)
 4. Click **Save**
-
-> **Skip Incidents** — requires ITSM integration (ServiceNow/Jira), not part of this demo.
 
 ## 4a. Create Azure Monitor Alert Rules (fires into SRE Agent)
 
@@ -129,104 +147,94 @@ These 5 alert rules cover all 8 fault scenarios. They fire as Azure Monitor aler
 
 | Alert name | Type | Fault scenarios triggered |
 |---|---|---|
-| `apim-backend-errors` | Metric (APIM 5xx) | Scenario 1 (backend fault), Scenario 2 (APIM rate limit) |
+| `apim-backend-errors` | Metric (APIM `Requests`, 5xx dimension) | Scenario 1 (backend fault), Scenario 2 (APIM rate limit) |
 | `aks-pod-crashloop` | Log search (KubeEvents) | Scenario 7 (CPU saturation), Scenario 8 (bad deployment) |
-| `aks-container-errors` | Log search (ContainerLog) | Scenario 4 (OpenAI down), Scenario 5 (Speech down), Scenario 6 (3rd party) |
-| `cosmos-connection-failures` | Log search (AzureDiagnostics) | Scenario 3 (Cosmos PE/DNS fault) |
-| `servicebus-deadletters` | Metric (SB dead letters) | Scenarios 1, 3, 4, 5 (any worker failure) |
+| `aks-container-errors` | Log search (ContainerLog `LogEntry`) | Scenario 4 (OpenAI down), Scenario 5 (Speech down), Scenario 6 (3rd party) |
+| `cosmos-connection-failures` | Log search (AppDependencies) | Scenario 3 (Cosmos PE/DNS fault) |
+| `servicebus-dlq-spike` | Metric (SB `DeadletteredMessages`) | Scenarios 1, 3, 4, 5 (any worker failure) |
 
-Run this script once after all resources are deployed:
+**Status (this deployment): ✅ All 5 created** via `az rest` (ARM API directly — `az monitor metrics alert create` fails for APIM with "Regional alert rule" error when using dimensions; use the REST method below instead).
 
 ```powershell
-$rg     = 'ai-obs-sre-demo'
-$lawId  = az monitor log-analytics workspace show -g $rg -n aiosre-la-demo --query id -o tsv
-$apimId = az apim show -g $rg -n aiosre-apim-demo --query id -o tsv
-$sbNs   = (az servicebus namespace list -g $rg -o json | ConvertFrom-Json)[0].name
-$sbId   = az servicebus namespace show -g $rg -n $sbNs --query id -o tsv
+$sub   = 'ba43c91f-2d76-4000-a7ad-24750cab54c3'
+$rg    = 'ai-obs-sre-demo'
+$loc   = 'australiaeast'
+$lawId = '/subscriptions/ba43c91f-2d76-4000-a7ad-24750cab54c3/resourceGroups/ai-obs-sre-demo/providers/Microsoft.OperationalInsights/workspaces/aiosre-la-demo'
+$apimId = '/subscriptions/ba43c91f-2d76-4000-a7ad-24750cab54c3/resourceGroups/ai-obs-sre-demo/providers/Microsoft.ApiManagement/service/aiosre-apim-demo'
+$sbId   = '/subscriptions/ba43c91f-2d76-4000-a7ad-24750cab54c3/resourceGroups/ai-obs-sre-demo/providers/Microsoft.ServiceBus/namespaces/aiosre-sb-demo-4lrdqw4e2yr2s'
+$baseUri = "https://management.azure.com/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.Insights"
+$sqApi   = 'api-version=2022-06-15'
+$maApi   = 'api-version=2018-03-01'
 
-# --- Alert 1: APIM backend 5xx spike (metric alert) ---
-az monitor metrics alert create `
-  --name 'apim-backend-errors' `
-  --resource-group $rg `
-  --scopes $apimId `
-  --description 'APIM is returning backend 5xx errors - possible backend API fault or APIM policy issue' `
-  --condition "count 'Requests' where 'BackendResponseCode' gte 500 greater than 3" `
-  --window-size PT5M `
-  --evaluation-frequency PT1M `
-  --severity 2
+# Alert 1: APIM backend 5xx (metric alert — location=global required)
+$a1 = @{ location='global'; properties=@{ description='APIM returning 5xx errors'; severity=2; enabled=$true
+  scopes=@($apimId); evaluationFrequency='PT1M'; windowSize='PT5M'
+  criteria=@{ 'odata.type'='Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+    allOf=@(@{ criterionType='StaticThresholdCriterion'; name='BackendErrors'
+      metricName='Requests'; metricNamespace='Microsoft.ApiManagement/service'
+      dimensions=@(@{ name='BackendResponseCodeCategory'; operator='Include'; values=@('5xx') })
+      operator='GreaterThan'; threshold=3; timeAggregation='Total' }) } } } | ConvertTo-Json -Depth 10 -Compress
+$a1 | Out-File "$env:TEMP\a1.json" -Encoding utf8NoBOM
+az rest --method PUT --uri "$baseUri/metricAlerts/apim-backend-errors?$maApi" --body "@$env:TEMP\a1.json" --headers "Content-Type=application/json" --query name -o tsv
 
-# --- Alert 2: AKS pod CrashLoop/OOM (log search alert) ---
-$q2 = "KubeEvents | where TimeGenerated > ago(5m) | where Reason has_any ('BackOff','CrashLoopBackOff','OOMKilling') | summarize AlertCount = count()"
-az monitor scheduled-query create `
-  --name 'aks-pod-crashloop' `
-  --resource-group $rg `
-  --scopes $lawId `
-  --description 'AKS pod crash loop or OOM - possible CPU saturation or bad deployment' `
-  --condition "count '${q2}' greater than 2" `
-  --window-size PT5M `
-  --evaluation-frequency PT5M `
-  --severity 2
+# Alert 2: AKS pod crashloop (log search)
+$a2 = @{ location=$loc; properties=@{ description='AKS pod crash loop or OOM'; severity=2; enabled=$true
+  scopes=@($lawId); evaluationFrequency='PT5M'; windowSize='PT5M'
+  criteria=@{ allOf=@(@{ query="KubeEvents | where TimeGenerated > ago(5m) | where Reason has_any ('BackOff','CrashLoopBackOff','OOMKilling') | count"
+    timeAggregation='Count'; operator='GreaterThan'; threshold=2
+    failingPeriods=@{ numberOfEvaluationPeriods=1; minFailingPeriodsToAlert=1 } }) } } } | ConvertTo-Json -Depth 10 -Compress
+$a2 | Out-File "$env:TEMP\a2.json" -Encoding utf8NoBOM
+az rest --method PUT --uri "$baseUri/scheduledQueryRules/aks-pod-crashloop?$sqApi" --body "@$env:TEMP\a2.json" --headers "Content-Type=application/json" --query name -o tsv
 
-# --- Alert 3: AKS container application errors (log search alert) ---
-$q3 = "ContainerLog | where TimeGenerated > ago(5m) | where LogSeverity == 'ERR' or LogMessage has_any ('ERROR','Exception','Traceback') | summarize AlertCount = count()"
-az monitor scheduled-query create `
-  --name 'aks-container-errors' `
-  --resource-group $rg `
-  --scopes $lawId `
-  --description 'High application error rate in AKS containers - possible dependency outage (OpenAI/Speech/ThirdParty)' `
-  --condition "count '${q3}' greater than 15" `
-  --window-size PT5M `
-  --evaluation-frequency PT5M `
-  --severity 2
+# Alert 3: AKS container errors (log search) — note: column is LogEntry not LogMessage
+$a3 = @{ location=$loc; properties=@{ description='High error rate in AKS containers'; severity=2; enabled=$true
+  scopes=@($lawId); evaluationFrequency='PT5M'; windowSize='PT5M'
+  criteria=@{ allOf=@(@{ query="ContainerLog | where TimeGenerated > ago(5m) | where LogEntry has_any ('ERROR','Exception','Traceback','CRITICAL') | count"
+    timeAggregation='Count'; operator='GreaterThan'; threshold=15
+    failingPeriods=@{ numberOfEvaluationPeriods=1; minFailingPeriodsToAlert=1 } }) } } } | ConvertTo-Json -Depth 10 -Compress
+$a3 | Out-File "$env:TEMP\a3.json" -Encoding utf8NoBOM
+az rest --method PUT --uri "$baseUri/scheduledQueryRules/aks-container-errors?$sqApi" --body "@$env:TEMP\a3.json" --headers "Content-Type=application/json" --query name -o tsv
 
-# --- Alert 4: Cosmos DB connection failures (log search alert) ---
-$q4 = "AzureDiagnostics | where TimeGenerated > ago(5m) | where ResourceProvider == 'MICROSOFT.DOCUMENTDB' | where statusCode_s in ('503','500','0') | summarize AlertCount = count()"
-az monitor scheduled-query create `
-  --name 'cosmos-connection-failures' `
-  --resource-group $rg `
-  --scopes $lawId `
-  --description 'Cosmos DB connection failures - possible private endpoint or DNS misconfiguration' `
-  --condition "count '${q4}' greater than 3" `
-  --window-size PT5M `
-  --evaluation-frequency PT5M `
-  --severity 1
+# Alert 4: Cosmos failures (log search via AppDependencies)
+$a4 = @{ location=$loc; properties=@{ description='Cosmos DB dependency failures'; severity=1; enabled=$true
+  scopes=@($lawId); evaluationFrequency='PT5M'; windowSize='PT5M'
+  criteria=@{ allOf=@(@{ query="AppDependencies | where TimeGenerated > ago(5m) | where DependencyType has 'cosmosdb' or Target has 'cosmos' | where Success == false | count"
+    timeAggregation='Count'; operator='GreaterThan'; threshold=3
+    failingPeriods=@{ numberOfEvaluationPeriods=1; minFailingPeriodsToAlert=1 } }) } } } | ConvertTo-Json -Depth 10 -Compress
+$a4 | Out-File "$env:TEMP\a4.json" -Encoding utf8NoBOM
+az rest --method PUT --uri "$baseUri/scheduledQueryRules/cosmos-connection-failures?$sqApi" --body "@$env:TEMP\a4.json" --headers "Content-Type=application/json" --query name -o tsv
 
-# --- Alert 5: Service Bus dead letters (metric alert) ---
-az monitor metrics alert create `
-  --name 'servicebus-deadletters' `
-  --resource-group $rg `
-  --scopes $sbId `
-  --description 'Service Bus dead letter messages accumulating - worker is failing to process messages' `
-  --condition "total 'DeadLetteredMessages' greater than 5" `
-  --window-size PT5M `
-  --evaluation-frequency PT1M `
-  --severity 2
+# Alert 5: Service Bus DLQ spike (metric alert)
+$a5 = @{ location='global'; properties=@{ description='Service Bus dead-letter queue spike'; severity=2; enabled=$true
+  scopes=@($sbId); evaluationFrequency='PT1M'; windowSize='PT5M'
+  criteria=@{ 'odata.type'='Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+    allOf=@(@{ criterionType='StaticThresholdCriterion'; name='DLQ'
+      metricName='DeadletteredMessages'; metricNamespace='Microsoft.ServiceBus/namespaces'
+      operator='GreaterThan'; threshold=5; timeAggregation='Maximum' }) } } } | ConvertTo-Json -Depth 10 -Compress
+$a5 | Out-File "$env:TEMP\a5.json" -Encoding utf8NoBOM
+az rest --method PUT --uri "$baseUri/metricAlerts/servicebus-dlq-spike?$maApi" --body "@$env:TEMP\a5.json" --headers "Content-Type=application/json" --query name -o tsv
 
 Write-Host 'All 5 alert rules created.'
 ```
 
-> **No action group required.** Alerts in Fired state are visible to the SRE Agent Incidents connector without email/webhook routing. Add an action group later if you want Teams/email notifications too.
+> **Note:** `az monitor metrics alert create` fails for APIM with "A Regional alert rule can only be created on a custom metric" when using `BackendResponseCode` dimension. Use `az rest --method PUT` with `location=global` as shown above.
 
-## 4b. Connector: Incidents (Azure Monitor Alerts)
+> **No action group required.** Alerts in Fired state are visible to the SRE Agent Incidents connector automatically.
 
-This connector makes the SRE Agent **auto-start an RCA investigation** when one of the above alerts fires during fault injection — without you manually asking the agent.
+## 4b. Incident Platform: Azure Monitor
 
-> **Prerequisites**: Section 4a alert rules created + Azure Monitor connector (section 4) already added.
+This makes the SRE Agent **auto-start an RCA investigation** when one of the above alerts fires during fault injection.
+
+> **Prerequisites**: Section 4a alert rules created.
 
 Steps:
-1. SRE Agent portal → **Full setup** → **Incidents** → `+`
-2. Select **Azure Monitor**
-3. Fill in:
+1. SRE Agent portal → **Builder** → **Incident platform** (left nav)
+2. **Incident platform** dropdown → select **Azure Monitor**
+3. Click **Connect** — Azure Monitor connects automatically using the agent's UAMI (no extra auth needed since Monitoring Reader was granted in step 2)
+4. Once connected, click **Create a response plan**
+5. In the response plan, scope to resource group `ai-obs-sre-demo` and enable **Auto-investigate**
 
-| Field | Value |
-|---|---|
-| Subscription | `ME-MngEnv106333-kuchandr-1` |
-| Auth | Managed Identity → `aiosre-sre-agent-demo-<suffix>` |
-
-4. Click **Next** → **Generate insights** tab:
-   - Enable **Auto-investigate on alert fire** → ✅
-   - Select all 5 alert rules created in section 4a
-5. Click **Save**
+**Status (this deployment): ✅ Azure Monitor connected**
 
 **Demo flow with this connector active:**
 ```
@@ -249,7 +257,7 @@ Agent posts RCA in chat: symptom → evidence chain → root cause → remediati
 | `cosmos-connection-failures` | `QueryDependencyErrors(cosmos)` → LAW Cosmos logs |
 | `servicebus-deadletters` | `QueryRecentAppErrors` → `TraceDrilldown` |
 
-## 6. Connector: Log Analytics (Plane 2 AKS platform + Plane 4 PaaS diagnostic logs)
+## 5. Connector: Log Analytics (Plane 2 AKS platform + Plane 4 PaaS diagnostic logs)
 
 This is the primary connector for both AKS infrastructure visibility and PaaS diagnostic logs.
 
@@ -275,22 +283,24 @@ This is the primary connector for both AKS infrastructure visibility and PaaS di
 > Do **not** select `aiosre-law-demo` — that is the backing store for the SRE Agent's own App Insights operational telemetry. The agent uses it internally; you don’t connect to it as an external data source.
 
 Steps:
-1. SRE Agent portal → **Full setup** → **Logging providers** → `+` → **Log Analytics**
+1. SRE Agent portal → **Builder** → **Connectors** → **+ Add connector** → **Log Analytics**
 2. Fill in:
 
 | Field | Value |
 |---|---|
-| Connector name | `sre-law-connector` |
+| Connector name | `law-connector` |
 | Log Analytics workspace | `aiosre-la-demo` (ai-obs-sre-demo) |
 
 3. Click **Test connection** → should pass
 4. Click **Save**
 
-## 7. Connector: GitHub (Code)
+**Status (this deployment): ✅ Connected**
+
+## 6. Connector: GitHub (Code)
 
 Allows the agent to correlate errors with source code, recent commits, and deployment changes.
 
-1. SRE Agent portal → **Full setup** → **Code** → `+` → **GitHub**
+1. SRE Agent portal → **Builder** → **Connectors** → **+ Add connector** → **GitHub**
 2. Fill in:
 
 | Field | Value |
@@ -300,11 +310,13 @@ Allows the agent to correlate errors with source code, recent commits, and deplo
 
 3. Click **Save**
 
-## 8. Knowledge Files
+**Status (this deployment): ✅ Connected** (repo: `ai-observability-sre-demo`)
+
+## 7. Knowledge Files (Knowledge sources)
 
 Upload the fault scenario runbooks so the agent knows expected symptoms and remediation steps for each scenario.
 
-1. SRE Agent portal → **Full setup** → **Knowledge files** → `+`
+1. SRE Agent portal → **Builder** → **Knowledge sources** → `+`
 2. Upload all `.md` files from `docs/runbooks/`:
    - `01-backend-api-fault.md`
    - `02-apim-rate-limit.md`
@@ -316,10 +328,24 @@ Upload the fault scenario runbooks so the agent knows expected symptoms and reme
    - `08-bad-deployment.md`
 3. Click **Done and go to agent**
 
-## 9. Kusto Tools
+## 8. Kusto Tools (Skill builder)
 
 Tools give the agent deterministic, parameterised KQL queries it can call during investigations.
-Upload each `.kql` file from `infra/sre-agent/kusto-tools/` via SRE Agent portal → **Tools** → **+ Add KQL tool**.
+
+**Location in portal:** SRE Agent → **Builder** → **Skill builder** → **+ Create skill**
+
+> **This is NOT in Knowledge sources.** Skill builder is where executable KQL tools go. Knowledge sources is for reference documents (runbooks, postmortems).
+
+**Steps:**
+1. **Builder → Skill builder → + Create skill**
+2. **Name:** `SRE Observability - ADX Kusto Tools`
+3. **Files:** Click **Upload folder** → select the entire `infra/sre-agent/kusto-tools/` folder
+   - This uploads all 6 `.kql` files + `SKILL.md`
+   - The portal shows a root `SKILL.md (default)` in the file tree — click it and **replace** the template content with the content from `infra/sre-agent/kusto-tools/SKILL.md`
+4. **Tools (right panel):** Expand **`sreagent-builtin-kusto-client`** → check all tools
+5. Click **Create**
+
+> The `SKILL.md` is the agent's instruction file — it tells the agent *when* to call each KQL file and what parameters to use. Without it populated, the agent won't invoke the right query for each scenario.
 
 | Tool name | ADX tables queried | What it answers |
 |---|---|---|
@@ -332,17 +358,114 @@ Upload each `.kql` file from `infra/sre-agent/kusto-tools/` via SRE Agent portal
 
 For each tool, declare typed parameters matching the `declare query_parameters(...)` block at the top of each `.kql` file.
 
-## 10. System Prompt (Instructions)
+## 9. Custom Agent: `SREObservabilityExpert`
 
-1. SRE Agent portal → **Instructions** tab
-2. Paste full contents of `infra/sre-agent/prompts/system-prompt.md`
-3. Click **Save**
+> **Important — no spaces in agent name.** The portal does not allow spaces in the custom agent name field.
 
-The system prompt tells the agent:
-- the 4-plane telemetry architecture (what data is where)
-- the ID taxonomy (`correlation_id` vs `trace_id` vs `request_id`)
-- which Kusto tools to call for each fault scenario
-- expected RCA output format (symptom → timeline → evidence chain → root cause → remediation)
+The custom agent packages your system prompt (Instructions), Skills, and Tools into a focused domain specialist. The parent SRE Agent orchestrates and hands off to this agent for all incident RCA work in `ai-obs-sre-demo`.
+
+> **There is no standalone Instructions tab** for the main SRE Agent. The system prompt lives inside the custom agent's Instructions field.
+
+**Navigate to:** SRE Agent portal → **Builder** → **Agent Canvas** → **Create** → **Custom Agent**
+
+The portal shows a **Form / YAML** toggle. Use Form view (default).
+
+### Step 1 — Name
+
+| Field | Value |
+|---|---|
+| **Name** | `SREObservabilityExpert` |
+
+> No spaces allowed. Do not use `SRE Observability Expert`.
+
+### Step 2 — Instructions
+
+1. Click in the **Instructions** text area
+2. Paste the full contents of `infra/sre-agent/prompts/system-prompt.md`
+3. Optionally click **Refine with AI** to let the portal suggest improvements (not required)
+
+The instructions tell the agent:
+- The 4-plane telemetry architecture (ADX primary, Azure Monitor for metrics, Prometheus for AKS, GitHub for code)
+- The ID taxonomy (`correlation_id` PRIMARY join key, vs `trace_id`, vs `request_id`)
+- The investigation recipe: which Kusto tool to call in which order for each fault type
+- The required RCA output format (symptom → timeline → evidence chain → root cause → remediation)
+- Confidence thresholds and NEVER rules (no logging request bodies, no invented correlation_ids)
+
+### Step 3 — Skills
+
+> The portal says: *"By default, this agent inherits 36 global skills. Selecting skills here will override the defaults."*
+
+Leave this at **default** (do NOT click Choose skills). This means the agent inherits all global skills including `SRE Observability - ADX Kusto Tools` that you created in step 8.
+
+> If you explicitly select skills here, you will override the defaults and must manually re-add every skill you want. Leave blank to inherit all.
+
+### Step 4 — Tools
+
+> The portal says: *"By default, this agent inherits 46 global tools. Selecting tools here will override the defaults."*
+
+Leave this at **default** (do NOT click Choose tools). All 46 global tools including the Kusto client tools are inherited automatically.
+
+### Step 5 — Hooks
+
+Leave **Manage Hooks** blank (not required for this demo).
+
+### Step 6 — Create
+
+Click **Create**. The canvas will show a new node `SREObservabilityExpert`.
+
+---
+
+## 10. Incident Response Plan
+
+This connects the Azure Monitor alert rules (step 4a) to the custom agent (step 9) so investigations start automatically when an alert fires.
+
+The wizard has **2 steps**: Response plan → Incidents preview.
+
+### Step 1 — Response plan
+
+**Navigate to:** Builder → Agent Canvas → Create → Trigger → Incident response plan
+
+| Field | Value | Notes |
+|---|---|---|
+| **Incident response plan name** | `SREFaultInvestigation` | No spaces |
+| **Severity** | `Sev 1`, `Sev 2` | Required. Our 5 alert rules are severity 1 and 2. Select both. |
+| **Title contains** | _(leave blank)_ | Leaving blank matches all alert titles. Optionally add `apim` / `aks` / `cosmos` to narrow scope. |
+| **Title does not contain** | _(leave blank)_ | No exclusions needed |
+| **Response subagent** | `SREObservabilityExpert` | Select from dropdown — this is the custom agent created in step 9 |
+| **Agent autonomy level** | **Review** | Review = agent proposes actions, waits for your approval before executing. Safer for demo. Autonomous = agent acts immediately without approval. |
+
+Click **Next**.
+
+### Step 2 — Incidents preview
+
+This step shows a preview of existing Azure Monitor alerts that match the filters you set. Verify that your 5 alert rules (`apim-backend-errors`, `aks-pod-crashloop`, `aks-container-errors`, `cosmos-connection-failures`, `servicebus-dlq-spike`) appear in the list (they may show as "No active incidents" if none are currently firing — that is expected).
+
+Click **Create** (or **Save**).
+
+**Expected canvas after this step:**
+```
+Incident Response Plan: SREFaultInvestigation
+    ↓ (alert fires)
+Custom Agent: SREObservabilityExpert
+    ├─ Instructions: system-prompt.md (RCA recipe + output format)
+    ├─ Skills: SRE Observability - ADX Kusto Tools (inherited global)
+    └─ Tools: sreagent-builtin-kusto-client (inherited global)
+```
+
+**Demo flow:**
+```
+Fault injected
+    ↓ (within 1–5 min)
+Azure Monitor alert fires
+    ↓
+Incident platform connector picks up alert
+    ↓
+SREObservabilityExpert auto-investigates
+    ↓
+Calls QueryRecentAppErrors → QueryDependencyErrors → TraceDrilldown
+    ↓
+Posts structured RCA: symptom → evidence chain → root cause [confidence] → remediation
+```
 
 ## 11. Smoke test
 
