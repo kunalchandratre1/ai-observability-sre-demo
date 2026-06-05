@@ -221,7 +221,7 @@ Set time range to **Last 1 hour**. Refresh all dashboards.
 - [ ] **Panel 2: Errors per minute** — low/zero (no spikes at baseline)
 - [ ] **Panel 3: Traffic (req/min)** — traffic spike visible from Burst x10
 - [ ] **Panel 4: AKS pod CPU (Managed Prometheus)** — per-pod CPU lines visible
-- [ ] **Panel 5: Top exceptions table** — rows present
+- [ ] **Panel 5: Top exceptions table** — empty at healthy baseline (no errors = no exceptions; this is correct — rows only appear during fault injection)
 - [ ] **Panel 6: Deployment versions stat** — current version displayed
 - [ ] **Filter test:** Paste your `correlation_id` into the variable box → Panel 5 filters to your single transaction
 

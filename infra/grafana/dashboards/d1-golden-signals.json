@@ -43,7 +43,7 @@
     },
     {
       "id": 4, "type": "timeseries", "title": "AKS pod CPU cores (Prometheus)",
-      "datasource": { "type":"prometheus", "uid":"dfnibr66safb4e" },
+      "datasource": { "type":"prometheus", "uid":"aiosre-amw-demo" },
       "targets": [{
         "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"app\"}[2m]))",
         "legendFormat": "{{pod}}",
