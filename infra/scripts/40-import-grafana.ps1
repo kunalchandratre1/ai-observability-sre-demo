@@ -5,6 +5,11 @@
     all dashboard JSON files from infra/grafana/dashboards/.
     Safe to re-run — datasources and dashboards use upsert/overwrite.
 
+    D1 panel notes:
+      Panel 6 "Deployment versions in last hour" is a TABLE panel (not stat).
+      Query: AppLogs | where Timestamp > ago(1h) | isnotempty(DeploymentVersion)
+      Requires DEPLOYMENT_VERSION env var set in api/k8s/app.yaml (set by 30-deploy-aks.ps1).
+
 .PARAMETER ResourceGroup
     Azure resource group (default: ai-obs-sre-demo)
 
@@ -133,6 +138,36 @@ foreach ($f in $dashboards) {
     $status = if ($result.status) { $result.status } else { 'ok' }
     Write-Host "  $($f.Name): $status"
     Remove-Item $tmpDash -ErrorAction SilentlyContinue
+}
+
+# ── [2b/3] Verify D1 deployment-versions panel query returns data ─────────────
+Write-Host ""
+Write-Host "=== [2b/3] Verifying D1 'Deployment versions' ADX query ==="
+# D1 panel 6 (table type) queries: AppLogs | where Timestamp > ago(1h) | isnotempty(DeploymentVersion)
+# Run it via ADX REST API with the current user's token
+try {
+    $adxToken = az account get-access-token --resource "https://help.kusto.windows.net" --query accessToken -o tsv
+    $kqlBody  = @{
+        db  = $adxDb
+        csl = "AppLogs | where Timestamp > ago(1h) | where isnotempty(DeploymentVersion) | summarize log_count=count() by ServiceName, DeploymentVersion | order by ServiceName asc"
+    } | ConvertTo-Json -Compress
+    $kqlResp  = Invoke-RestMethod -Method POST `
+        -Uri "$adxUri/v1/rest/query" `
+        -Headers @{ Authorization = "Bearer $adxToken"; "Content-Type" = "application/json" } `
+        -Body $kqlBody
+    $rows = $kqlResp.Tables[0].Rows
+    if ($rows -and $rows.Count -gt 0) {
+        Write-Host "  DeploymentVersion data found — $($rows.Count) row(s):" -ForegroundColor Green
+        foreach ($r in $rows) {
+            Write-Host "    ServiceName=$($r[0])  DeploymentVersion=$($r[1])  log_count=$($r[2])"
+        }
+    } else {
+        Write-Host "  WARNING: No DeploymentVersion data in the last hour." -ForegroundColor Yellow
+        Write-Host "  Panel 6 will show 'No data'. Ensure DEPLOYMENT_VERSION env var is set in app.yaml" -ForegroundColor Yellow
+        Write-Host "  and pods have been running within the last hour." -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "  Skipped ADX verification (token or connectivity error): $_" -ForegroundColor DarkGray
 }
 
 # ── [3/3] Summary ─────────────────────────────────────────────────────────────
