@@ -20,6 +20,50 @@
 - D1 panel "AKS pod CPU" comes from **Container Insights** (Log Analytics InsightsMetrics via Azure Monitor datasource); all application signals come from ADX. APIM metrics from Azure Monitor (D2).
 - "We deliberately did NOT shove everything into ADX. Each plane has the right tool. AKS infra metrics stay in Log Analytics via Container Insights — and the SRE Agent can query them via the Log Analytics connector."
 
+## Stage 2b — Pre-demo data seeding (run ~5 min before Stage 3)
+
+Before starting fault injection, run the seeder script to pre-populate the
+**D1 Golden Signals** exceptions panel and **D2 APIM Health** join table with
+realistic data (CorrelationId, DependencyName, TraceId all populated).
+
+**PowerShell (local or Cloud Shell):**
+```powershell
+$env:APIM_GW_URL = "https://aiosre-apim-demo.azure-api.net"
+$env:APIM_KEY    = "f6c382528a3240eda0b1d8df6f3b9991"
+cd infra/scripts
+.\70-seed-demo-data.ps1                  # default: 5 orders per fault
+.\70-seed-demo-data.ps1 -OrdersPerFault 10   # richer dataset
+.\70-seed-demo-data.ps1 -SkipWait        # skip the 60s wait if re-running
+```
+
+**Bash / Azure Cloud Shell:**
+```bash
+export APIM_GW_URL="https://aiosre-apim-demo.azure-api.net"
+export APIM_KEY="f6c382528a3240eda0b1d8df6f3b9991"
+cd infra/scripts
+bash 70-seed-demo-data.sh                     # default: 5 orders per fault
+ORDERS_PER_FAULT=10 bash 70-seed-demo-data.sh  # richer dataset
+SKIP_WAIT=1 bash 70-seed-demo-data.sh          # skip the 60s wait if re-running
+```
+
+**What the seeder generates (~3.5 min):**
+
+| Fault triggered | Orders sent | DependencyName in D1 | CorrelationId prefix |
+|----------------|------------|---------------------|----------------------|
+| `openai-down` | 5 | `AzureOpenAI` | `demo-openai-down-YYMMDD-HHMM-*` |
+| `speech-down` | 5 | `AzureSpeech` | `demo-speech-down-YYMMDD-HHMM-*` |
+| `cosmos-dns-break` | 5 | `Cosmos` | `demo-cosmos-dns-break-YYMMDD-HHMM-*` |
+| *(healthy)* | 10 | — | `demo-healthy-YYMMDD-HHMM-*` |
+
+After the script completes, the D1 **"Top recent exceptions"** table has 15 rows with all
+columns filled. Copy any `CorrelationId` value from the panel and paste it into the
+`correlation_id` filter at the top of D1 or D2 to demonstrate end-to-end drill-down.
+
+> **Timing note**: the script waits 60 s for the ADX ingestion pipeline, then prints
+> row counts from ADX so you can confirm data is ready before opening Grafana.
+
+---
+
 ## Stage 3 — Run all 8 fault scenarios
 
 For each, follow the same loop:
