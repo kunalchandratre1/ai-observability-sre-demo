@@ -365,6 +365,24 @@ if ($apiExists) {
     Write-Host "  Backend URL to use: $backendUrl"
 }
 
+# ── Link AKS to Azure Monitor Workspace (Managed Prometheus) ─────────────────
+# Enables the ama-metrics DaemonSet on AKS nodes which scrapes Prometheus metrics
+# and sends them to the AMW. Without this, the AKS pod CPU panel in Grafana D1
+# shows "No data". Uses --enable-azure-monitor-metrics which is idempotent — safe
+# to run on every deploy even if already enabled (outputs a warning, exit 0).
+Write-Host ""
+Write-Host "=== [8b/8] Linking AKS to Azure Monitor Workspace (Managed Prometheus) ==="
+$amwId     = (az monitor account list -g $rg -o json | ConvertFrom-Json)[0].id
+$grafanaId = (az grafana list -g $rg -o json | ConvertFrom-Json)[0].id
+Write-Host "  AMW    : $amwId"
+Write-Host "  Grafana: $grafanaId"
+az aks update -g $rg -n $AKS `
+    --enable-azure-monitor-metrics `
+    --azure-monitor-workspace-resource-id $amwId `
+    --grafana-resource-id $grafanaId `
+    --output none 2>&1 | Where-Object { $_ -notmatch '^WARNING' } | Select-Object -Last 3
+Write-Host "  ama-metrics scraping enabled." -ForegroundColor Green
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "AKS deployment complete."
