@@ -188,10 +188,18 @@ union AppLogs, AppSpans, AppExceptions
 ```kql
 AppSpans
 | where Timestamp > ago(1h)
-| summarize count(), avg(DependencyLatencyMs) by DependencyName
+| where isnotempty(DependencyName)
+| summarize span_count = count(), avg_latency_ms = round(avg(DependencyLatencyMs), 2) by DependencyName
+| order by avg_latency_ms desc
 ```
-- [ ] Rows present for `AzureOpenAI`, `AzureSpeech`, `ThirdPartyAPI`, `Cosmos`
-- [ ] `avg_DependencyLatencyMs` is non-zero and reasonable
+> **Column guide:**
+> - `span_count` — one span = one call to that dependency from one request. So if you submitted 7 requests, each dep should show `span_count = 7` (7 requests × 1 call each). **If one dep shows a lower number** (e.g. Cosmos = 5 while others = 7), it means 2 transactions never reached that dep — a sign something broke mid-pipeline. All 5 should match at healthy baseline.
+> - `avg_latency_ms` — average call latency in ms across all requests in the last hour, rounded to 2 decimal places.
+> - **`NaN` row (if you see it without the `isnotempty` filter):** spans where `DependencyName` is empty are root/internal spans (e.g. the top-level HTTP span). They have no `DependencyLatencyMs`, so `avg()` = NaN. The `isnotempty(DependencyName)` filter removes them.
+
+- [ ] Rows present for `AzureOpenAI`, `AzureSpeech`, `ThirdPartyAPI`, `Cosmos`, `AzureServiceBus`
+- [ ] `avg_latency_ms` is non-zero and within expected ranges (OpenAI ~1000–3000ms, Speech ~400–900ms, ThirdParty ~800–1500ms, Cosmos ~100–500ms, ServiceBus ~200–1000ms)
+- [ ] `span_count` matches across all 5 dependencies (same number of requests hit each dep)
 
 ### 3.5 — Deployment version visible
 ```kql
