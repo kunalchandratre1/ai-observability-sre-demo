@@ -101,6 +101,7 @@
         new JProperty("operationName",  context.Operation?.Name ?? ""),
         new JProperty("method",         context.Request.Method),
         new JProperty("url",            context.Request.OriginalUrl.ToString()),
+        new JProperty("backendUrl",     context.Api.ServiceUrl.ToString()),
         new JProperty("requestId",      context.RequestId.ToString()),
         new JProperty("correlationId",  context.Variables.ContainsKey("cid") ? (string)context.Variables["cid"] : ""),
         new JProperty("traceparent",    context.Request.Headers.GetValueOrDefault("traceparent","")),
