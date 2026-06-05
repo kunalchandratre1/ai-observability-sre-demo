@@ -25,7 +25,7 @@
     },
     {
       "id":3, "type":"timeseries", "title":"APIM diagnostics: status by operation (ADX)",
-      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ffnibp61pux34d" },
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
         "query":"APIMGatewayLogs | summarize c=count() by bin(Timestamp,1m), Status, OperationName | order by Timestamp asc"
       }],
@@ -33,7 +33,7 @@
     },
     {
       "id":4, "type":"table", "title":"APIM 5xx joined with backend AppExceptions on x-correlation-id",
-      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ffnibp61pux34d" },
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
         "query":"let apim5xx = APIMGatewayLogs | where Status >= 500 | project Timestamp, ApiName, OperationName, Status, BackendStatus, TotalTimeMs, CorrelationId, Traceparent, RequestId; let appErr = AppExceptions | project ExcTs=Timestamp, ExceptionType, ExceptionMessage, DependencyName, CorrelationId, ServiceName, Pod; apim5xx | join kind=leftouter appErr on CorrelationId | top 200 by Timestamp desc"
       }],

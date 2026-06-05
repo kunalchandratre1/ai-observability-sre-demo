@@ -16,7 +16,7 @@
   "panels": [
     {
       "id": 1, "type": "timeseries", "title": "Latency p95 (per dependency, ms)",
-      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ffnibp61pux34d" },
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
         "query": "AppSpans | where ServiceName == '$service' | where Name startswith 'dep.' | summarize p95=percentile(DependencyLatencyMs, 95) by bin(Timestamp, 1m), DependencyName | order by Timestamp asc",
         "resultFormat":"time_series"
@@ -25,7 +25,7 @@
     },
     {
       "id": 2, "type": "timeseries", "title": "Errors per minute (AppExceptions)",
-      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ffnibp61pux34d" },
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
         "query": "AppExceptions | where ServiceName == '$service' | summarize errors=count() by bin(Timestamp, 1m), DependencyName | order by Timestamp asc",
         "resultFormat":"time_series"
@@ -34,7 +34,7 @@
     },
     {
       "id": 3, "type": "timeseries", "title": "Traffic (requests/min)",
-      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ffnibp61pux34d" },
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
         "query": "AppSpans | where Name == 'POST /api/orders' or Name endswith '/orders' | summarize req=count() by bin(Timestamp, 1m) | order by Timestamp asc",
         "resultFormat":"time_series"
@@ -53,7 +53,7 @@
     },
     {
       "id": 5, "type": "table", "title": "Top recent exceptions (filterable by correlation_id/trace_id)",
-      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ffnibp61pux34d" },
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
         "query": "AppExceptions | where ServiceName == '$service' | where '$correlation_id' == '' or CorrelationId == '$correlation_id' | where '$trace_id' == '' or TraceId == '$trace_id' | top 100 by Timestamp desc | project Timestamp, ExceptionType, ExceptionMessage, DependencyName, CorrelationId, TraceId, Pod, DeploymentVersion"
       }],
@@ -61,7 +61,7 @@
     },
     {
       "id": 6, "type": "stat", "title": "Deployment versions in last hour",
-      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"ffnibp61pux34d" },
+      "datasource": { "type":"grafana-azure-data-explorer-datasource", "uid":"{{ADX_DS_UID}}" },
       "targets": [{
         "query": "AppLogs | where ServiceName == '$service' | summarize req=count() by DeploymentVersion | top 10 by req desc"
       }],

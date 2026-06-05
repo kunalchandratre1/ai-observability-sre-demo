@@ -78,7 +78,9 @@ $dsAdxJson | Set-Content $tmpDs -Encoding utf8
 az grafana data-source delete -n $grafanaName --data-source 'ADX' 2>$null | Out-Null
 az grafana data-source create -n $grafanaName --definition "@$tmpDs" 2>&1 | Out-Null
 Remove-Item $tmpDs -ErrorAction SilentlyContinue
-Write-Host "  ADX datasource: done."
+# Resolve the actual UID assigned by Grafana (changes every time datasource is recreated)
+$adxDsUid = (az grafana data-source list -n $grafanaName -o json | ConvertFrom-Json | Where-Object { $_.name -eq 'ADX' }).uid
+Write-Host "  ADX datasource: done (uid=$adxDsUid)."
 
 # Azure Monitor datasource (usually pre-created by AMG, just verify)
 $existingDs = az grafana data-source list -n $grafanaName -o json 2>&1 | ConvertFrom-Json
@@ -115,6 +117,7 @@ foreach ($f in $dashboards) {
     $dashJson = $dashJson -replace '\{\{LAW_RESOURCE_ID\}\}', $lawResourceId
     $dashJson = $dashJson -replace '\{\{SUBSCRIPTION_ID\}\}', $subId
     $dashJson = $dashJson -replace '\{\{TENANT_ID\}\}', $tenantId
+    $dashJson = $dashJson -replace '\{\{ADX_DS_UID\}\}', $adxDsUid
 
     $tmpDash = [System.IO.Path]::GetTempFileName() + '.json'
     $dashJson | Set-Content $tmpDash -Encoding utf8
