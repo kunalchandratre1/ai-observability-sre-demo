@@ -358,6 +358,7 @@ AZKVAuditLogs
 **Open:** `https://sre.azure.com` → `aiosre-sre-agent-demo`
 
 ### 6.1 — All sources green (home page banner)
+> **ADX permission:** The SRE Agent service principal requires `Viewer` on the ADX `observability` database. This is granted automatically by `50-create-sre-agent.sh` (step 3). If you see a 403 Forbidden error on the ADX connector, note the `aadapp=<CLIENT_ID>` from the error and run: `az kusto database-principal-assignment create --cluster-name aiosreadxdemo4lrdqw --database-name observability --resource-group ai-obs-sre-demo --principal-assignment-name sre-agent-viewer --principal-id <CLIENT_ID> --principal-type App --role Viewer`
 - [ ] Banner shows **"All sources configured"**
 - [ ] Code: 1 repository ✅
 - [ ] Logs: 2 log providers ✅
