@@ -377,6 +377,12 @@ Show me the most recent application errors in the last 30 minutes
 - [ ] Response does **not** hallucinate error types — all names match known error patterns (`dependency.error`, `ClientAuthenticationError`, `fault.*`)
 
 ### 6.3 — Custom agent smoke test
+
+> **Do you always need `/agent`?**
+> In free-form chat you must use the `/agent SREObservabilityExpert` prefix to explicitly route to the custom subagent — the parent agent does **not** auto-delegate mid-conversation.
+> **During fault injection you do NOT need to type `/agent` at all.** When a Sev 1/2 alert fires, the `SREFaultInvestigation` incident response plan (section 6.4) automatically invokes `SREObservabilityExpert` as the response subagent — no manual routing needed.
+> This smoke test just confirms the subagent is wired up and can reach ADX before you need it for real.
+
 ```
 /agent SREObservabilityExpert Are there any dependency failures in the last hour?
 ```
