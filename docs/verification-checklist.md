@@ -166,7 +166,7 @@ union withsource=Type AppLogs, AppSpans, AppExceptions, APIMGatewayLogs
 > |---|---|
 > | **Healthy transaction** | UI response panel (`correlation_id` field) or PowerShell: `(Invoke-RestMethod ...).correlation_id` |
 > | **Failed transaction (API returned error but JSON body present)** | UI response panel still shows `correlation_id` even on 503/500 — copy from there |
-> | **Failed transaction (gateway-level 5xx, no body)** | ADX: `APIMGatewayLogs \| where Status >= 500 \| project Timestamp, CorrelationId, Status, DurationMs \| order by Timestamp desc \| take 10` |
+> | **Failed transaction (gateway-level 5xx, no body)** | ADX: `APIMGatewayLogs \| where Status >= 500 \| project Timestamp, CorrelationId, Status, TotalTimeMs \| order by Timestamp desc \| take 10` |
 > | **Find any recent exception** | ADX: `AppExceptions \| where Timestamp > ago(30m) \| project Timestamp, CorrelationId, ExceptionType, ExceptionMessage \| order by Timestamp desc \| take 10` |
 > | **Find failed spans** | ADX: `AppSpans \| where ErrorType != "" and Timestamp > ago(30m) \| project Timestamp, CorrelationId, DependencyName, ErrorType \| order by Timestamp desc \| take 10` |
 > | **Gateway-level 5xx (no body)** | ADX: `APIMGatewayLogs \| where Status >= 500 \| project Timestamp, CorrelationId, Status, TotalTimeMs \| order by Timestamp desc \| take 10` |
@@ -175,7 +175,7 @@ union withsource=Type AppLogs, AppSpans, AppExceptions, APIMGatewayLogs
 > If the UI shows no body (gateway timeout), fall back to the `APIMGatewayLogs` query above.
 
 ```kql
-union AppLogs, AppSpans, AppExceptions
+union withsource=Type AppLogs, AppSpans, AppExceptions
 | where CorrelationId == "<paste your correlation_id>"
 | project Timestamp, Type, ServiceName, Name, DependencyName, Level, ExceptionType, CorrelationId
 | order by Timestamp asc
