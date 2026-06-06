@@ -391,6 +391,23 @@ Show me the most recent application errors in the last 30 minutes
 - [ ] Returns per-dependency breakdown across OpenAI, Speech, Cosmos, ThirdParty
 
 ### 6.4 — Incident response plan is active
+
+> **How the incident plan triggers — and why it's NOT ADX-based:**
+>
+> The `SREFaultInvestigation` plan is triggered by **Azure Monitor alert firings** (Sev 1 / Sev 2). Azure Monitor alert rules can only query **Log Analytics** (log search alerts) or **Azure Monitor Metrics** — they cannot directly query ADX.
+>
+> | Alert type | Data source | Can trigger incident plan? |
+> |---|---|---|
+> | Metric alert (e.g. APIM 5xx rate) | Azure Monitor Metrics | ✅ Yes |
+> | Log search alert (e.g. pod crashloop) | Log Analytics (LAW) | ✅ Yes |
+> | ADX query (e.g. AppExceptions spike) | ADX / Kusto | ❌ Not directly |
+>
+> **So what about AppExceptions in ADX?** ADX is the *investigation* store — not the alert trigger. The incident plan fires on a LAW/Metric alert, then `SREObservabilityExpert` queries ADX to find root cause. If you want to alert directly on `AppExceptions`, you have two options:
+> 1. **Add a LAW sink to the OTel pipeline** — duplicate exceptions to both ADX and LAW; create a log search alert on LAW's `AppExceptions` table.
+> 2. **ADX scheduled-query alerting** — ADX supports its own alert queries (`set_query_results_as_scheduled_alert`) that emit to Azure Monitor Alerts, which would then trigger the incident plan.
+>
+> In this demo, alerts fire from LAW (`aks-container-errors`, `aks-pod-crashloop`, `cosmos-connection-failures`) and Azure Monitor Metrics (`apim-backend-errors`, `servicebus-dlq-spike`). Those alerts are the triggers; ADX is the investigation layer.
+
 - [ ] **Builder → Incident response plans** → `SREFaultInvestigation` shows as **Active**
 - [ ] Severity filter: Sev 1 and Sev 2 selected
 - [ ] Response subagent: `SREObservabilityExpert`
