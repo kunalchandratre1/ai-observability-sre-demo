@@ -14,10 +14,8 @@ Run all scenarios from `docs/verification-checklist.md` first — every baseline
 > **Fastest path (local VS Code terminal):** The `.env` file was written automatically at the end of deployment. Just load it:
 >
 > ```powershell
-> # PowerShell — load from .env file (one-time per terminal session)
-> Get-Content infra/scripts/.env | ForEach-Object {
->     if ($_ -match '^\s*([^#][^=]+)=(.+)') { Set-Item "env:$($Matches[1])" $Matches[2] }
-> }
+> # PowerShell — single line, safe to copy-paste
+> Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
 > ```
 > ```bash
 > # Bash / WSL — load from .env file (one-time per terminal session)
