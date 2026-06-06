@@ -58,6 +58,47 @@ resource ama 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = {
   }
 }
 
+// Minimal DCR: Warning+ syslog from auth/daemon/kern/syslog facilities only
+resource dcr 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
+  name: '${vmName}-syslog-dcr'
+  location: location
+  tags: tags
+  properties: {
+    dataSources: {
+      syslog: [
+        {
+          name: 'syslog-minimal'
+          streams: [ 'Microsoft-Syslog' ]
+          facilityNames: [ 'syslog', 'auth', 'daemon', 'kern' ]
+          logLevels: [ 'Warning', 'Error', 'Critical', 'Alert', 'Emergency' ]
+        }
+      ]
+    }
+    destinations: {
+      logAnalytics: [
+        {
+          name: 'law-dest'
+          workspaceResourceId: logAnalyticsWorkspaceId
+        }
+      ]
+    }
+    dataFlows: [
+      {
+        streams: [ 'Microsoft-Syslog' ]
+        destinations: [ 'law-dest' ]
+      }
+    ]
+  }
+}
+
+resource dcrAssoc 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = {
+  name: '${vmName}-syslog-assoc'
+  scope: vm
+  properties: {
+    dataCollectionRuleId: dcr.id
+  }
+}
+
 output vmId string = vm.id
 output vmName string = vm.name
 output vmPrincipalId string = vm.identity.principalId
