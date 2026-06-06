@@ -326,13 +326,16 @@ Syslog
 
 ### 5.8 — Redis diagnostic logs
 ```kql
-AzureMetrics
+AzureDiagnostics
 | where TimeGenerated > ago(1h)
-| where _ResourceId has "microsoft.cache/redis"
-| summarize count() by MetricName
+| where ResourceProvider == "MICROSOFT.CACHE"
+| summarize count() by Category, ResourceType
 | order by count_ desc
 ```
-- [ ] Rows present — Redis metrics flowing (Redis Standard/Basic has no log categories; metrics confirm the resource is active)
+- [ ] Rows present — Redis `ConnectedClientList` log flowing (fires every ~60s, lists all connected client IPs/ports)
+- [ ] `Category` = `ConnectedClientList` visible in results
+
+> **What Redis exports:** `ConnectedClientList` (log — client connection list, fires every ~60s → `AzureDiagnostics`) and `AllMetrics` (platform metrics → `AzureMetrics` once the LAW pipeline initialises, typically 10–30 min after diagnostic setting creation). For the demo baseline check, `AzureDiagnostics` with `ConnectedClientList` is the reliable signal. `AllMetrics` includes `connectedclients`, `usedmemory`, `serverLoad`, `cachehits/misses`, `totalcommandsprocessed` — visible in Azure Monitor Metrics blade immediately even if not yet in LAW.
 
 ### 5.9 — Key Vault audit logs
 ```kql
