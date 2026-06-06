@@ -4,21 +4,49 @@ Run all scenarios from `docs/verification-checklist.md` first — every baseline
 
 ## Environment variables (set once in your terminal)
 
+> **Where to run these commands — local VS Code terminal (recommended) or Azure Cloud Shell?**
+>
+> | Terminal | When to use | Notes |
+> |---|---|---|
+> | **Local VS Code terminal** ✅ (recommended) | Day-to-day demo prep | `infra/scripts/.env` is auto-written by `deploy-all.ps1` — just source it once |
+> | **Azure Cloud Shell** | When you don't have the repo cloned locally | Must set env vars manually each session; no local `.env` file |
+>
+> **Fastest path (local VS Code terminal):** The `.env` file was written automatically at the end of deployment. Just load it:
+>
+> ```powershell
+> # PowerShell — load from .env file (one-time per terminal session)
+> Get-Content infra/scripts/.env | ForEach-Object {
+>     if ($_ -match '^\s*([^#][^=]+)=(.+)') { Set-Item "env:$($Matches[1])" $Matches[2] }
+> }
+> ```
+> ```bash
+> # Bash / WSL — load from .env file (one-time per terminal session)
+> source infra/scripts/.env
+> ```
+>
+> After that, `$APIM_KEY` (bash) / `$env:APIM_KEY` (PowerShell) are set and all fault scripts work without any further setup.
+
+**If setting manually (e.g. Azure Cloud Shell):**
+
 ```powershell
 $env:APIM_GW_URL = "https://aiosre-apim-demo.azure-api.net"
 $env:APIM_KEY    = "<your-apim-subscription-key>"
 $env:RG          = "ai-obs-sre-demo"
 $env:APIM        = "aiosre-apim-demo"
-$env:COSMOS_ACCOUNT = "aiosre-cosmos-demo"   # check actual name in portal
+$env:COSMOS_ACCOUNT = "aiosrecosmosdemo4lrdqw4e2yr2s"
 ```
 
-For bash (WSL or the shell scripts):
 ```bash
 export APIM_GW_URL="https://aiosre-apim-demo.azure-api.net"
 export APIM_KEY="<your-apim-subscription-key>"
 export RG="ai-obs-sre-demo"
 export APIM="aiosre-apim-demo"
 ```
+
+> Fetch `<your-apim-subscription-key>` with:
+> ```bash
+> az apim subscription list --resource-group ai-obs-sre-demo --service-name aiosre-apim-demo --query "[?contains(scope,'unlimited')].{key:primaryKey}" -o tsv
+> ```
 
 ## Fault injection loop (same for every scenario)
 
