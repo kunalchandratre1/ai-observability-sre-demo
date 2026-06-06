@@ -372,8 +372,9 @@ In the chat box:
 Show me the most recent application errors in the last 30 minutes
 ```
 - [ ] Agent calls `QueryRecentAppErrors` (visible in reasoning steps)
-- [ ] Returns exception types and counts from ADX
-- [ ] `correlation_id` values in response are real (UUID format — not invented)
+- [ ] Returns a natural language summary with **error type names** (e.g. `dependency.error`, `fault.cosmos_dns_break.detected`) and occurrence counts from ADX — **not** raw rows
+- [ ] If system is healthy/quiet, agent reports "no recent errors" or "system is currently quiet" — this is correct at a clean baseline
+- [ ] Response does **not** hallucinate error types — all names match known error patterns (`dependency.error`, `ClientAuthenticationError`, `fault.*`)
 
 ### 6.3 — Custom agent smoke test
 ```
