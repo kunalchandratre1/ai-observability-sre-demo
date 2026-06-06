@@ -177,7 +177,7 @@ union withsource=Type AppLogs, AppSpans, AppExceptions, APIMGatewayLogs
 ```kql
 union withsource=Type AppLogs, AppSpans, AppExceptions
 | where CorrelationId == "<paste your correlation_id>"
-| project Timestamp, Type, ServiceName, Name, DependencyName, Level, ExceptionType, CorrelationId
+| project Timestamp, Type, ServiceName, Name, DependencyName, SeverityText, ExceptionType, CorrelationId
 | order by Timestamp asc
 ```
 - [ ] Multiple rows returned (spans + logs from both `api-service` and `worker-service`)
