@@ -29,7 +29,7 @@ realistic data (CorrelationId, DependencyName, TraceId all populated).
 **PowerShell (local or Cloud Shell):**
 ```powershell
 $env:APIM_GW_URL = "https://aiosre-apim-demo.azure-api.net"
-$env:APIM_KEY    = "f6c382528a3240eda0b1d8df6f3b9991"
+$env:APIM_KEY    = "<your-apim-subscription-key>"
 cd infra/scripts
 .\70-seed-demo-data.ps1                  # default: 5 orders per fault
 .\70-seed-demo-data.ps1 -OrdersPerFault 10   # richer dataset
@@ -39,7 +39,7 @@ cd infra/scripts
 **Bash / Azure Cloud Shell:**
 ```bash
 export APIM_GW_URL="https://aiosre-apim-demo.azure-api.net"
-export APIM_KEY="f6c382528a3240eda0b1d8df6f3b9991"
+export APIM_KEY="<your-apim-subscription-key>"
 cd infra/scripts
 bash 70-seed-demo-data.sh                     # default: 5 orders per fault
 ORDERS_PER_FAULT=10 bash 70-seed-demo-data.sh  # richer dataset

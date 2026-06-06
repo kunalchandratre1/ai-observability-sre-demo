@@ -46,13 +46,13 @@
     # Explicit params, 10 orders per fault
     .\70-seed-demo-data.ps1 `
         -ApimGatewayUrl "https://aiosre-apim-demo.azure-api.net" `
-        -ApimKey "f6c382528a3240eda0b1d8df6f3b9991" `
+        -ApimKey "<your-apim-subscription-key>" `
         -OrdersPerFault 10
 
 .EXAMPLE
-    # Azure Cloud Shell one-liner (set env vars first)
+    # Azure Cloud Shell one-liner (set env vars first, or copy infra/scripts/.env.example → .env)
     $env:APIM_GW_URL="https://aiosre-apim-demo.azure-api.net"
-    $env:APIM_KEY="f6c382528a3240eda0b1d8df6f3b9991"
+    $env:APIM_KEY="<your-apim-subscription-key>"
     ./70-seed-demo-data.ps1
 #>
 [CmdletBinding()]
@@ -72,8 +72,8 @@ if (-not $ApimGatewayUrl) {
     Write-Host "  [info] APIM_GW_URL not set — using default: $ApimGatewayUrl" -ForegroundColor DarkGray
 }
 if (-not $ApimKey) {
-    $ApimKey = "f6c382528a3240eda0b1d8df6f3b9991"
-    Write-Host "  [info] APIM_KEY not set — using embedded default key" -ForegroundColor DarkGray
+    Write-Error "APIM_KEY is required. Set `$env:APIM_KEY or pass -ApimKey. See infra/scripts/.env.example."
+    exit 1
 }
 
 $base    = $ApimGatewayUrl.TrimEnd('/')

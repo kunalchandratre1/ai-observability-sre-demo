@@ -7,7 +7,7 @@
 #
 # Usage:
 #   export APIM_GW_URL="https://aiosre-apim-demo.azure-api.net"
-#   export APIM_KEY="f6c382528a3240eda0b1d8df6f3b9991"
+#   export APIM_KEY="<your-apim-subscription-key>"
 #   bash 70-seed-demo-data.sh
 #
 # Optional env vars:
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 APIM_GW_URL="${APIM_GW_URL:-https://aiosre-apim-demo.azure-api.net}"
-APIM_KEY="${APIM_KEY:-f6c382528a3240eda0b1d8df6f3b9991}"
+APIM_KEY="${APIM_KEY:?'APIM_KEY is required. Set it or copy infra/scripts/.env.example to .env and source it.'}"
 ORDERS_PER_FAULT="${ORDERS_PER_FAULT:-5}"
 SKIP_WAIT="${SKIP_WAIT:-0}"
 SEED=$(date +"%y%m%d-%H%M")

@@ -6,7 +6,7 @@ Run all scenarios from `docs/verification-checklist.md` first — every baseline
 
 ```powershell
 $env:APIM_GW_URL = "https://aiosre-apim-demo.azure-api.net"
-$env:APIM_KEY    = "f6c382528a3240eda0b1d8df6f3b9991"
+$env:APIM_KEY    = "<your-apim-subscription-key>"
 $env:RG          = "ai-obs-sre-demo"
 $env:APIM        = "aiosre-apim-demo"
 $env:COSMOS_ACCOUNT = "aiosre-cosmos-demo"   # check actual name in portal
@@ -15,7 +15,7 @@ $env:COSMOS_ACCOUNT = "aiosre-cosmos-demo"   # check actual name in portal
 For bash (WSL or the shell scripts):
 ```bash
 export APIM_GW_URL="https://aiosre-apim-demo.azure-api.net"
-export APIM_KEY="f6c382528a3240eda0b1d8df6f3b9991"
+export APIM_KEY="<your-apim-subscription-key>"
 export RG="ai-obs-sre-demo"
 export APIM="aiosre-apim-demo"
 ```
@@ -137,7 +137,7 @@ RG=ai-obs-sre-demo APIM=aiosre-apim-demo bash infra/scripts/60-fault-toggle.sh a
 
 ### Inject
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh cosmos-dns-break on
 ```
 
@@ -168,7 +168,7 @@ Orders are not being persisted to Cosmos. What is the root cause?
 
 ### Remediate
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh cosmos-dns-break off
 ```
 
@@ -187,7 +187,7 @@ APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1
 
 ### Inject
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh openai-down on
 ```
 Or click **OpenAI down** in the UI Fault toggles section.
@@ -218,7 +218,7 @@ Voice orders are failing with 503. What is broken and why?
 
 ### Remediate
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh openai-down off
 ```
 Or click **Reset all** in the UI.
@@ -238,7 +238,7 @@ Or click **Reset all** in the UI.
 
 ### Inject
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh speech-down on
 ```
 
@@ -261,7 +261,7 @@ Orders are returning 503. Is it OpenAI or Speech that is down?
 
 ### Remediate
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh speech-down off
 ```
 
@@ -278,7 +278,7 @@ APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1
 
 ### Inject
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh thirdparty-down on
 ```
 
@@ -304,7 +304,7 @@ Third-party API is showing errors. What is the business impact?
 
 ### Remediate
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh thirdparty-down off
 ```
 
@@ -322,7 +322,7 @@ APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1
 
 ### Inject
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh cpu-burn 800
 ```
 This adds an 800ms CPU spin to every request handler.
@@ -357,7 +357,7 @@ Latency has increased by ~800ms. Is this a dependency issue or an infrastructure
 
 ### Remediate
 ```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh cpu-burn 0
 ```
 
@@ -441,7 +441,7 @@ If anything gets stuck or you lose track of what is active, run:
 
 ```bash
 # Reset all app-level faults via admin endpoint
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=f6c382528a3240eda0b1d8df6f3b9991 \
+APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=$APIM_KEY \
   bash infra/scripts/60-fault-toggle.sh exception off
 
 # Or via UI: click "Reset all" in the Fault toggles section
