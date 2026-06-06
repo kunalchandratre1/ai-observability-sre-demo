@@ -310,7 +310,7 @@ CDBDataPlaneRequests
 ```kql
 AZMSOperationalLogs
 | where TimeGenerated > ago(1h)
-| summarize count() by OperationName, ResultType
+| summarize count() by EventName, Status
 ```
 - [ ] Rows present — Service Bus operations visible
 
