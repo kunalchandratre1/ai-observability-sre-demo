@@ -83,7 +83,7 @@ All items reference the actual deployed environment: subscription `ba43c91f-2d76
 ```kql
 ApiManagementGatewayLogs
 | where TimeGenerated > ago(30m)
-| project TimeGenerated, OperationId, ResponseCode, BackendResponseCode, DurationMs, ClientIp
+| project TimeGenerated, OperationId, ResponseCode, BackendResponseCode, TotalTime, ClientIp
 | order by TimeGenerated desc
 | take 20
 ```
