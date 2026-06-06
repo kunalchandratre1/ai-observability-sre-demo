@@ -69,8 +69,8 @@ resource dcr 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
         {
           name: 'syslog-minimal'
           streams: [ 'Microsoft-Syslog' ]
-          facilityNames: [ 'syslog', 'auth', 'daemon', 'kern' ]
-          logLevels: [ 'Warning', 'Error', 'Critical', 'Alert', 'Emergency' ]
+          facilityNames: [ 'syslog', 'auth', 'daemon', 'kern', 'user', 'cron' ]
+          logLevels: [ 'Debug', 'Info', 'Notice', 'Warning', 'Error', 'Critical', 'Alert', 'Emergency' ]
         }
       ]
     }

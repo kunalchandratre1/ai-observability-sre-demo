@@ -321,8 +321,8 @@ Syslog
 | order by TimeGenerated desc
 | take 10
 ```
-- [ ] Rows present — VM syslog flowing from on-prem (peered VNet via VPN Gateway)
-- [ ] If empty: check that the on-prem VM's Log Analytics agent is connected (VM → Extensions → MMA/OMS agent installed and heartbeat present)
+- [ ] Rows present — VM syslog flowing (AMA + DCR pipeline: facilities `syslog`, `auth`, `daemon`, `kern`, `user`, `cron`, severity `Info` and above)
+- [ ] If empty: AMA extension is confirmed installed — wait 5 min after DCR update, then retry. Run `logger "test syslog from aiosre-onprem-vm"` on the VM to force a syslog entry.
 
 ### 5.8 — Redis health check (Azure Monitor Metrics blade)
 
