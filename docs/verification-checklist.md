@@ -324,18 +324,22 @@ Syslog
 - [ ] Rows present — VM syslog flowing from on-prem (peered VNet via VPN Gateway)
 - [ ] If empty: check that the on-prem VM's Log Analytics agent is connected (VM → Extensions → MMA/OMS agent installed and heartbeat present)
 
-### 5.8 — Redis diagnostic logs
+### 5.8 — Redis health check (Azure Monitor Metrics blade)
+
+> **Why not LAW?** Azure Cache for Redis (Basic tier) supports `AllMetrics` and `ConnectedClientList` diagnostic export, but the LAW ingestion pipeline for a newly-configured setting takes **30–60 minutes** to initialise. For the demo baseline, verify via the Azure Monitor Metrics blade which is always immediate.
+
+**Portal:** search `aiosre-redis-demo-4lrdqw4e2yr2s` → **Metrics**
+- [ ] Metric: `Connected Clients` — value ≥ 1 (api-service connects on startup)
+- [ ] Metric: `Server Load` — value > 0
+
+**Once LAW pipeline has initialised (≥ 60 min after first deploy), optionally verify via LAW:**
 ```kql
 AzureDiagnostics
 | where TimeGenerated > ago(1h)
 | where ResourceProvider == "MICROSOFT.CACHE"
-| summarize count() by Category, ResourceType
-| order by count_ desc
+| summarize count() by Category
 ```
-- [ ] Rows present — Redis `ConnectedClientList` log flowing (fires every ~60s, lists all connected client IPs/ports)
-- [ ] `Category` = `ConnectedClientList` visible in results
-
-> **What Redis exports:** `ConnectedClientList` (log — client connection list, fires every ~60s → `AzureDiagnostics`) and `AllMetrics` (platform metrics → `AzureMetrics` once the LAW pipeline initialises, typically 10–30 min after diagnostic setting creation). For the demo baseline check, `AzureDiagnostics` with `ConnectedClientList` is the reliable signal. `AllMetrics` includes `connectedclients`, `usedmemory`, `serverLoad`, `cachehits/misses`, `totalcommandsprocessed` — visible in Azure Monitor Metrics blade immediately even if not yet in LAW.
+> Expected: `ConnectedClientList` rows present once the LAW export pipeline is active.
 
 ### 5.9 — Key Vault audit logs
 ```kql
