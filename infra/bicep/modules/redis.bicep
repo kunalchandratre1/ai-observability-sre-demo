@@ -25,6 +25,7 @@ resource diag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   scope: redis
   properties: {
     workspaceId: logAnalyticsWorkspaceId
+    logAnalyticsDestinationType: 'Dedicated'
     metrics: [ { category: 'AllMetrics', enabled: true } ]
   }
 }

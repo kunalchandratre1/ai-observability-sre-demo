@@ -326,18 +326,18 @@ Syslog
 
 ### 5.8 — Redis diagnostic logs
 ```kql
-AzureDiagnostics
+AzureMetrics
 | where TimeGenerated > ago(1h)
-| where ResourceProvider == "MICROSOFT.CACHE"
-| summarize count() by OperationName, ResultType
+| where Namespace == "MICROSOFT.CACHE/REDIS"
+| summarize count() by MetricName
+| order by count_ desc
 ```
-- [ ] Rows present
+- [ ] Rows present — Redis metrics flowing (Redis Standard/Basic has no log categories; metrics confirm the resource is active)
 
 ### 5.9 — Key Vault audit logs
 ```kql
-AzureDiagnostics
+AZKVAuditLogs
 | where TimeGenerated > ago(1h)
-| where ResourceProvider == "MICROSOFT.KEYVAULT"
 | project TimeGenerated, OperationName, ResultType, CallerIpAddress
 | order by TimeGenerated desc
 | take 10

@@ -7,6 +7,7 @@ param apimUamiPrincipalId string
 param sreAgentUamiPrincipalId string
 param privateEndpointSubnetId string
 param privateDnsZoneIdKv string
+param logAnalyticsWorkspaceId string
 param tags object
 
 var kvName = take(replace('${prefix}kv${env}${uniqueString(resourceGroup().id)}', '-', ''), 24)
@@ -67,6 +68,17 @@ resource raSre 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleSecretsUser)
     principalId: sreAgentUamiPrincipalId
     principalType: 'ServicePrincipal'
+  }
+}
+
+resource diag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'to-la'
+  scope: kv
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logAnalyticsDestinationType: 'Dedicated'
+    logs: [ { category: 'AuditEvent', enabled: true } ]
+    metrics: [ { category: 'AllMetrics', enabled: true } ]
   }
 }
 

@@ -91,6 +91,7 @@ module kv 'modules/keyvault.bicep' = {
     sreAgentUamiPrincipalId: identity.outputs.sreAgentUamiPrincipalId
     privateEndpointSubnetId: network.outputs.peSubnetId
     privateDnsZoneIdKv: network.outputs.privateDnsZoneIdKv
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
     tags: tags
   }
 }
