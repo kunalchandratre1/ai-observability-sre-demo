@@ -11,7 +11,7 @@ All items reference the actual deployed environment: subscription `ba43c91f-2d76
 |---|---|
 | **UI (App Service)** | **`https://aiosre-ui-demo.azurewebsites.net`** |
 | APIM gateway URL | `https://aiosre-apim-demo.azure-api.net` |
-| APIM subscription key | retrieve with: `az apim subscription show --resource-group ai-obs-sre-demo --service-name aiosre-apim-demo --sid voice-orders --query primaryKey -o tsv` |
+| APIM subscription key | `a24aea50caa449ca93d71c4bd95371f5` (unlimited product) — or run `source infra/scripts/.env` to load from local `.env` file |
 | Grafana URL | `https://aiosre-grafana-demo-hebrbpdbdtfrhmdg.eau.grafana.azure.com` |
 | ADX cluster URI | `https://aiosreadxdemo4lrdqw.australiaeast.kusto.windows.net` |
 | ADX database | `observability` |
