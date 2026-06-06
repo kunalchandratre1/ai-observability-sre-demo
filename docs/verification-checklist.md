@@ -328,7 +328,7 @@ Syslog
 ```kql
 AzureMetrics
 | where TimeGenerated > ago(1h)
-| where Namespace == "MICROSOFT.CACHE/REDIS"
+| where _ResourceId has "microsoft.cache/redis"
 | summarize count() by MetricName
 | order by count_ desc
 ```
