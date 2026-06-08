@@ -1,10 +1,27 @@
 <!--
   Scenario 2: APIM-only fault. Tightens rate limit to 1 call / 60s so the
   demo client immediately sees 429s without touching the backend.
+  CORS is retained so the browser receives the 429 status (without CORS headers
+  the browser blocks the response entirely and shows "Failed to fetch").
 -->
 <policies>
   <inbound>
     <base />
+    <cors allow-credentials="true">
+      <allowed-origins>
+        <origin>https://aiosre-ui-demo.azurewebsites.net</origin>
+        <origin>http://localhost:8080</origin>
+        <origin>http://localhost:3000</origin>
+      </allowed-origins>
+      <allowed-methods preflight-result-max-age="300">
+        <method>GET</method>
+        <method>POST</method>
+        <method>OPTIONS</method>
+      </allowed-methods>
+      <allowed-headers>
+        <header>*</header>
+      </allowed-headers>
+    </cors>
     <rate-limit-by-key calls="1" renewal-period="60" counter-key="@(context.Subscription?.Id ?? &quot;anon&quot;)" />
   </inbound>
   <backend><base /></backend>
