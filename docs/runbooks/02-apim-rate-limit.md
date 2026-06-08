@@ -27,6 +27,10 @@ This swaps the inbound policy to `fault-rate-limit-tight.xml` (1 call / 60s). Th
 - **D1 — Golden Signals** → backend traffic flatlines; AppExceptions stays at 0.
 
 ## SRE Agent RCA
+
+Prompt: **"Why are voice orders failing in the last 15 minutes?"**
+
+Expected reasoning chain (≥ 0.9 confidence):
 1. `APIMvsBackendCorrelation(15m, "submit-order")` → many 429 rows with no matching backend rows on `correlation_id`.
 2. `QueryRecentAppErrors(15m, "api-service")` → empty (rules out backend).
 3. APIM Azure Monitor metric `Rate Limit Exceeded` spikes (Agent reads via Azure Monitor connector).
