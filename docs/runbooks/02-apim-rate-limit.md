@@ -7,8 +7,10 @@
 > **Note:** This fault swaps the APIM inbound policy and requires `RG` + `APIM` env vars. There is no UI button for this scenario.
 
 **Option A — PowerShell (Windows / VS Code terminal)**
-```powershell# Run from repo root
-Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
+```powershell
+# Run each line separately in the terminal
+Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"
+Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
 .\infra\scripts\60-fault-toggle.ps1 -Scenario apim-rate-limit -State on
 ```
 
