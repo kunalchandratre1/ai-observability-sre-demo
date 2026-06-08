@@ -32,8 +32,12 @@ Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
 ## Symptoms (Grafana)
 - **D1 — Golden Signals** → "Errors per minute (AppExceptions)" spikes for `service=api-service`, `DependencyName=""` (synthetic exception is not dep-tagged).
+- **D1 — Golden Signals** → **"Top recent exceptions"** table (bottom of the dashboard) populates with rows showing:
+  - `ExceptionType = RuntimeError`
+  - `ExceptionMessage = "synthetic unhandled exception (...)"`
+  - `DependencyName` is empty — confirms the fault is in the main request handler, not a downstream call
+  - Click **copy** next to `correlation_id` or `trace_id` on any row → paste into the dashboard filter variables to drill into that single transaction across all panels.
 - **D2 — APIM Health** → APIM `Failed Requests` rises **with backend `Status=500`**, while APIM platform metrics show no APIM-internal failure.
-- **AppExceptions table** rows have `ExceptionType=RuntimeError`, `ExceptionMessage="synthetic unhandled exception (...)"`.
 
 ## SRE Agent RCA
 Prompt: "Why are voice orders failing in the last 15 minutes?"
