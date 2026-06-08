@@ -7,11 +7,28 @@
 - `GET /voice/admin/faults` returns all `false`.
 
 ## Inject
-```bash
-APIM_GW_URL=https://aiosre-apim-demo.azure-api.net APIM_KEY=<key> \
-  bash infra/scripts/60-fault-toggle.sh exception on
-# Then drive traffic from the UI ("Burst x10").
+
+Choose **any one** of the three methods — they all call the same admin endpoint:
+
+**Option A — UI button (easiest, no terminal needed)**
+> In the browser at `https://aiosre-ui-demo.azurewebsites.net`, scroll to **Fault toggles** → click **Force exception**.
+
+**Option B — PowerShell (Windows / VS Code terminal)**
+```powershell
+# Load env vars first (if not already loaded)
+Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
+
+# Inject fault
+.\infra\scripts\60-fault-toggle.ps1 -Scenario exception -State on
 ```
+
+**Option C — Bash / WSL**
+```bash
+source infra/scripts/.env
+bash infra/scripts/60-fault-toggle.sh exception on
+```
+
+Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
 ## Symptoms (Grafana)
 - **D1 — Golden Signals** → "Errors per minute (AppExceptions)" spikes for `service=api-service`, `DependencyName=""` (synthetic exception is not dep-tagged).
@@ -30,6 +47,15 @@ Expected reasoning chain (≥ 0.9 confidence):
 Root cause: api-service raises synthetic exception (admin fault toggle).
 
 ## Remediation
+
+**Option A — UI:** Click **Reset all** in the Fault toggles section.
+
+**Option B — PowerShell:**
+```powershell
+.\infra\scripts\60-fault-toggle.ps1 -Scenario exception -State off
+```
+
+**Option C — Bash:**
 ```bash
 bash infra/scripts/60-fault-toggle.sh exception off
 ```
