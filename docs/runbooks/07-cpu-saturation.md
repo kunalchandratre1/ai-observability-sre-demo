@@ -3,10 +3,25 @@
 **Goal:** Prove SRE Agent can correlate latency increase to CPU saturation on a specific pod (cross-plane: ADX traces × Managed Prometheus metrics).
 
 ## Inject
-```bash
-bash infra/scripts/60-fault-toggle.sh cpu-burn 800   # 800ms CPU spin per request
-# Generate sustained traffic (UI Burst x10 a few times, or `hey`/`k6` from a workstation).
+
+Choose **any one** of the three methods:
+
+**Option A — UI button (easiest)**
+> In the browser at `https://aiosre-ui-demo.azurewebsites.net`, scroll to **Fault toggles** → click **CPU burn 800ms** (pre-set to 800ms spin per request).
+
+**Option B — PowerShell (Windows / VS Code terminal)**
+```powershell
+Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
+.\infra\scripts\60-fault-toggle.ps1 -Scenario cpu-burn -State 800
 ```
+
+**Option C — Bash / WSL**
+```bash
+source infra/scripts/.env
+bash infra/scripts/60-fault-toggle.sh cpu-burn 800   # 800ms CPU spin per request
+```
+
+Then generate sustained traffic — click **Burst x10** in the UI several times to saturate the pod.
 
 ## Symptoms
 - **D1 — Golden Signals** →
@@ -23,9 +38,19 @@ bash infra/scripts/60-fault-toggle.sh cpu-burn 800   # 800ms CPU spin per reques
 Root cause: sustained CPU saturation on api-service pods (synthetic burn); HPA scaling helps but does not fully recover during burn.
 
 ## Remediation
+
+**Option A — UI:** Click **Reset all** in the Fault toggles section (sets cpu-burn to 0ms).
+
+**Option B — PowerShell:**
+```powershell
+.\infra\scripts\60-fault-toggle.ps1 -Scenario cpu-burn -State 0
+```
+
+**Option C — Bash:**
 ```bash
 bash infra/scripts/60-fault-toggle.sh cpu-burn 0
 ```
+
 Real-world fixes: bump CPU requests/limits, raise HPA targetCPU, investigate hot-path code.
 
 ## Verification

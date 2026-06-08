@@ -3,10 +3,25 @@
 **Goal:** A misconfiguration causes Cosmos hostname resolution to fail. Worker fails Cosmos writes; orders pile up; Grafana shows DNS errors; SRE Agent identifies it.
 
 ## Inject
-```bash
-APIM_GW_URL=... APIM_KEY=... bash infra/scripts/60-fault-toggle.sh cosmos-dns-break on
+
+Choose **any one** of the three methods:
+
+**Option A — UI button (easiest)**
+> In the browser at `https://aiosre-ui-demo.azurewebsites.net`, scroll to **Fault toggles** → click **Cosmos DNS break**.
+
+**Option B — PowerShell (Windows / VS Code terminal)**
+```powershell
+Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
+.\infra\scripts\60-fault-toggle.ps1 -Scenario cosmos-dns-break -State on
 ```
-This rewrites the Cosmos hostname inside the worker to `*.invalid-dns.azure.com` so the SDK cannot resolve.
+
+**Option C — Bash / WSL**
+```bash
+source infra/scripts/.env
+bash infra/scripts/60-fault-toggle.sh cosmos-dns-break on
+```
+
+This rewrites the Cosmos hostname inside the worker to `*.invalid-dns.azure.com` so the SDK cannot resolve. Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
 (Real-world equivalent: someone removed the Private DNS Zone link, or the `privatelink.documents.azure.com` zone record was deleted. Validate with `nslookup <cosmos-account>.documents.azure.com` from any AKS pod — see [cosmos-private-endpoint.md](cosmos-private-endpoint.md).)
 
@@ -23,9 +38,19 @@ This rewrites the Cosmos hostname inside the worker to `*.invalid-dns.azure.com`
 Root cause: Cosmos endpoint hostname does not resolve to private endpoint IP — likely Private DNS Zone link removed or DNS override misconfigured.
 
 ## Remediation
-```bash
-APIM_GW_URL=... APIM_KEY=... bash infra/scripts/60-fault-toggle.sh cosmos-dns-break off
+
+**Option A — UI:** Click **Reset all** in the Fault toggles section.
+
+**Option B — PowerShell:**
+```powershell
+.\infra\scripts\60-fault-toggle.ps1 -Scenario cosmos-dns-break -State off
 ```
+
+**Option C — Bash:**
+```bash
+bash infra/scripts/60-fault-toggle.sh cosmos-dns-break off
+```
+
 (Real fix: re-link `privatelink.documents.azure.com` to the AKS VNet, or correct DNS overrides.)
 
 ## Verification

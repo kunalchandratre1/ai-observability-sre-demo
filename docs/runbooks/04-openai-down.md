@@ -1,9 +1,25 @@
 # Scenario 4 — Azure OpenAI endpoint unavailable
 
 ## Inject
+
+Choose **any one** of the three methods:
+
+**Option A — UI button (easiest)**
+> In the browser at `https://aiosre-ui-demo.azurewebsites.net`, scroll to **Fault toggles** → click **OpenAI down**.
+
+**Option B — PowerShell (Windows / VS Code terminal)**
+```powershell
+Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
+.\infra\scripts\60-fault-toggle.ps1 -Scenario openai-down -State on
+```
+
+**Option C — Bash / WSL**
 ```bash
+source infra/scripts/.env
 bash infra/scripts/60-fault-toggle.sh openai-down on
 ```
+
+Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
 ## Symptoms (Grafana)
 - **D3 — AI Deps** → OpenAI errors/min spikes; latency 0 (synthetic exception bypasses the call).
@@ -17,6 +33,15 @@ bash infra/scripts/60-fault-toggle.sh openai-down on
 Root cause: OpenAI dependency outage (synthetic toggle); business impact = 100% of voice orders failing at intent extraction.
 
 ## Remediation
+
+**Option A — UI:** Click **Reset all** in the Fault toggles section.
+
+**Option B — PowerShell:**
+```powershell
+.\infra\scripts\60-fault-toggle.ps1 -Scenario openai-down -State off
+```
+
+**Option C — Bash:**
 ```bash
 bash infra/scripts/60-fault-toggle.sh openai-down off
 ```

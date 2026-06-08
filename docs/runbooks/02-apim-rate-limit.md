@@ -3,10 +3,22 @@
 **Goal:** APIM blocks calls with 429s; backend stays idle and healthy. SRE Agent must conclude APIM is the cause, not the backend.
 
 ## Inject
-```bash
-RG=ai-obs-sre-demo APIM=aiosre-apim-demo bash infra/scripts/60-fault-toggle.sh apim-rate-limit on
+
+> **Note:** This fault swaps the APIM inbound policy and requires `RG` + `APIM` env vars. There is no UI button for this scenario.
+
+**Option A — PowerShell (Windows / VS Code terminal)**
+```powershell
+Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
+.\infra\scripts\60-fault-toggle.ps1 -Scenario apim-rate-limit -State on
 ```
-This swaps the inbound policy to `fault-rate-limit-tight.xml` (1 call / 60s).
+
+**Option B — Bash / WSL**
+```bash
+source infra/scripts/.env
+bash infra/scripts/60-fault-toggle.sh apim-rate-limit on
+```
+
+This swaps the inbound policy to `fault-rate-limit-tight.xml` (1 call / 60s). Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
 ## Symptoms (Grafana)
 - **D2 — APIM Health** → APIM `Status=429` panel spikes; backend `BackendStatus` columns show 0 / null (calls did not reach backend).
@@ -20,8 +32,15 @@ This swaps the inbound policy to `fault-rate-limit-tight.xml` (1 call / 60s).
 Root cause: APIM rate-limit policy on `voice-orders` API is too tight.
 
 ## Remediation
+
+**Option A — PowerShell:**
+```powershell
+.\infra\scripts\60-fault-toggle.ps1 -Scenario apim-rate-limit -State off
+```
+
+**Option B — Bash:**
 ```bash
-RG=ai-obs-sre-demo APIM=aiosre-apim-demo bash infra/scripts/60-fault-toggle.sh apim-rate-limit off
+bash infra/scripts/60-fault-toggle.sh apim-rate-limit off
 ```
 
 ## Verification
