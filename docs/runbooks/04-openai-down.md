@@ -9,6 +9,7 @@ Choose **any one** of the three methods:
 
 **Option B — PowerShell (Windows / VS Code terminal)**
 ```powershell
+Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"
 Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
 .\infra\scripts\60-fault-toggle.ps1 -Scenario openai-down -State on
 ```
@@ -38,6 +39,7 @@ Root cause: OpenAI dependency outage (synthetic toggle); business impact = 100% 
 
 **Option B — PowerShell:**
 ```powershell
+Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"
 .\infra\scripts\60-fault-toggle.ps1 -Scenario openai-down -State off
 ```
 

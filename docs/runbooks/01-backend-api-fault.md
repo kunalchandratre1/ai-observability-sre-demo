@@ -15,10 +15,9 @@ Choose **any one** of the three methods — they all call the same admin endpoin
 
 **Option B — PowerShell (Windows / VS Code terminal)**
 ```powershell
-# Load env vars first (if not already loaded)
+# Run from repo root
+Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"
 Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
-
-# Inject fault
 .\infra\scripts\60-fault-toggle.ps1 -Scenario exception -State on
 ```
 
@@ -56,6 +55,7 @@ Root cause: api-service raises synthetic exception (admin fault toggle).
 
 **Option B — PowerShell:**
 ```powershell
+Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"
 .\infra\scripts\60-fault-toggle.ps1 -Scenario exception -State off
 ```
 

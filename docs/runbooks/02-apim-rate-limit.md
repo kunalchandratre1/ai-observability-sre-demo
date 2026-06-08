@@ -7,8 +7,8 @@
 > **Note:** This fault swaps the APIM inbound policy and requires `RG` + `APIM` env vars. There is no UI button for this scenario.
 
 **Option A — PowerShell (Windows / VS Code terminal)**
-```powershell
-Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
+```powershell# Run from repo root
+Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
 .\infra\scripts\60-fault-toggle.ps1 -Scenario apim-rate-limit -State on
 ```
 
@@ -35,6 +35,7 @@ Root cause: APIM rate-limit policy on `voice-orders` API is too tight.
 
 **Option A — PowerShell:**
 ```powershell
+Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"
 .\infra\scripts\60-fault-toggle.ps1 -Scenario apim-rate-limit -State off
 ```
 
