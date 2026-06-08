@@ -118,24 +118,30 @@ switch ($Scenario) {
         }
     }
     'apim-rate-limit' {
-        $rg      = $ResourceGroup
+        $rg       = $ResourceGroup
         $apimName = (az apim list -g $rg -o json | ConvertFrom-Json)[0].name
+        $sub      = (az account show --query id -o tsv)
+        $apiUrl   = "https://management.azure.com/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.ApiManagement/service/$apimName/apis/voice-orders/policies/policy?api-version=2022-08-01"
         $policyDir = Join-Path $ScriptDir '..' 'apim' 'policies'
+
+        function Set-ApimPolicy([string]$xmlFile) {
+            # Strip BOM if present, then embed XML in JSON body
+            $policyXml = (Get-Content $xmlFile -Raw -Encoding utf8).TrimStart([char]0xFEFF)
+            $token   = az account get-access-token --query accessToken -o tsv
+            $headers = @{ Authorization = "Bearer $token"; 'Content-Type' = 'application/json' }
+            $body    = @{ properties = @{ format = 'xml'; value = $policyXml } } | ConvertTo-Json -Depth 5 -Compress
+            Invoke-RestMethod -Method Put -Uri $apiUrl -Headers $headers -Body $body -ContentType 'application/json' | Out-Null
+        }
+
         if ($State -eq 'on') {
             $policyFile = Resolve-Path (Join-Path $policyDir 'fault-rate-limit-tight.xml')
             Write-Host "  Applying tight rate-limit policy to APIM $apimName..."
-            az apim api policy create-or-update -g $rg --service-name $apimName `
-                --api-id voice-orders `
-                --policy-content (Get-Content $policyFile -Raw) `
-                --policy-format xml -o none
+            Set-ApimPolicy $policyFile
             Write-Host "  Rate-limit fault ON. Now only 4 req/min per caller IP allowed."
         } else {
             $policyFile = Resolve-Path (Join-Path $policyDir 'inbound-correlation.xml')
             Write-Host "  Restoring normal APIM policy on $apimName..."
-            az apim api policy create-or-update -g $rg --service-name $apimName `
-                --api-id voice-orders `
-                --policy-content (Get-Content $policyFile -Raw) `
-                --policy-format xml -o none
+            Set-ApimPolicy $policyFile
             Write-Host "  Rate-limit fault OFF. Normal policy restored."
         }
     }
