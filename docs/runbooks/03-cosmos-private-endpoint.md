@@ -24,7 +24,14 @@ bash infra/scripts/60-fault-toggle.sh cosmos-dns-break on
 
 This rewrites the Cosmos hostname inside the worker to `*.invalid-dns.azure.com` so the SDK cannot resolve. Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
-(Real-world equivalent: someone removed the Private DNS Zone link, or the `privatelink.documents.azure.com` zone record was deleted. Validate with `nslookup <cosmos-account>.documents.azure.com` from any AKS pod — see [cosmos-private-endpoint.md](cosmos-private-endpoint.md).)
+**What exactly happens when this toggle is on:**
+
+1. The toggle sets `fault_force_cosmos_dns_break = true` in the api-service in-memory config (via `POST /voice/admin/faults`).
+2. **api-service** — on every order, it fires a direct Cosmos write probe using the broken hostname (`aiosrecosmosdemo4lrdqw4e2yr2s.invalid-dns.azure.com`). The DNS lookup fails immediately. The error is caught, logged to ADX (`AppExceptions` with `ExceptionType=NameResolutionError`), and surfaced in the UI dependency card (`cosmos: error`). The order itself still completes and goes to Service Bus.
+3. **worker-service** — when it dequeues from Service Bus and tries to write the order to Cosmos, it also uses the broken hostname. This write fails with the same DNS error. Cosmos writes pile up; the Service Bus queue grows.
+4. **The order_id is still created and returned** — the fault is in the async write path, not the synchronous order acceptance path.
+
+This simulates the real-world scenario where the **Cosmos Private Endpoint DNS Zone link is removed** from the AKS VNet — the hostname `*.documents.azure.com` no longer resolves to the private IP (`10.40.x.x`) and instead fails with `NXDOMAIN`.
 
 ## Symptoms (Grafana)
 - **D4 — Cosmos PE** → "DNS / PE resolution failures" table fills with `ExceptionType=NameResolutionError` (or `socket.gaierror`/`HttpRequestError`), `ExceptionMessage` containing `invalid-dns.azure.com`.
