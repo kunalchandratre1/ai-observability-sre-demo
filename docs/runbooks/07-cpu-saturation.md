@@ -32,7 +32,9 @@ Then generate sustained traffic — click **Burst x10** in the UI several times 
 
 ## SRE Agent RCA
 
-Prompt: **"Voice orders are slow. What is causing the latency increase?"**
+Prompt: **"Voice orders are taking much longer than usual to respond. What is causing the slowness?"**
+
+> This is a latency-only symptom — no errors, just degraded response time. The agent must distinguish CPU saturation from a slow dependency.
 
 Expected reasoning chain (≥ 0.9 confidence):
 1. `QueryLatencyPercentiles(30m, "api-service")` → p95 increased ~ 800ms above baseline starting at T0.

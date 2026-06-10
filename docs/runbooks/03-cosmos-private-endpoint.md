@@ -42,7 +42,9 @@ This simulates the real-world scenario where the **Cosmos Private Endpoint DNS Z
 
 ## SRE Agent RCA
 
-Prompt: **"Why are Cosmos DB writes failing? Orders are not being persisted."**
+Prompt: **"I placed several orders and they were confirmed, but I can't find them in the system. Orders seem to be getting lost."**
+
+> This is an intentionally vague, user-level symptom — the agent must figure out the layer from telemetry, not from the question wording. This makes the demo more realistic and impressive.
 
 Expected reasoning chain (≥ 0.9 confidence):
 1. `QueryDependencyErrors(15m, "Cosmos")` → 100% failure rate, single `ExceptionType`.

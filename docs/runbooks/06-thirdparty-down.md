@@ -28,7 +28,9 @@ Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
 ## SRE Agent RCA
 
-Prompt: **"Are there any dependency issues affecting voice orders right now?"**
+Prompt: **"Orders are completing but some data seems incomplete or missing a snippet. What is degraded?"**
+
+> The third-party fault is non-fatal (orders still return 200), so the symptom is subtle degradation, not a hard failure. This tests whether the agent can classify severity correctly.
 
 Expected reasoning chain (≥ 0.9 confidence):
 1. `QueryDependencyErrors(15m, "ThirdPartyAPI")` → 100% errors.
