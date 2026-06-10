@@ -27,6 +27,10 @@ Then click **Burst x10** in the UI 2–3 times to generate traffic.
 - API still returns 200 (3rd-party is non-fatal), but per-txn UI card shows `thirdparty: error`.
 
 ## SRE Agent RCA
+
+Prompt: **"Are there any dependency issues affecting voice orders right now?"**
+
+Expected reasoning chain (≥ 0.9 confidence):
 1. `QueryDependencyErrors(15m, "ThirdPartyAPI")` → 100% errors.
 2. `QueryRecentAppErrors(15m, "api-service")` → no top-level exceptions (request still completes).
 3. Agent must classify severity as **degraded** (not outage) because business txn still succeeds.

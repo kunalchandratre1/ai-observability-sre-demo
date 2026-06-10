@@ -27,6 +27,10 @@ Then click **Burst x10** in the UI 2–3 times to generate traffic.
 - API returns 503 with `{"dependency":"AzureSpeech", ...}`.
 
 ## SRE Agent RCA
+
+Prompt: **"Why are voice orders failing in the last 15 minutes?"**
+
+Expected reasoning chain (≥ 0.9 confidence):
 `QueryDependencyErrors(15m, "AzureSpeech")` → 100% errors. Cross-check with `QueryDependencyErrors(15m, "AzureOpenAI")` → healthy → rules out shared identity/network root cause. Agent attributes failure to Speech endpoint specifically.
 
 ## Remediation

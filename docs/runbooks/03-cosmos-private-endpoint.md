@@ -41,6 +41,10 @@ This simulates the real-world scenario where the **Cosmos Private Endpoint DNS Z
 - Service Bus queue length grows (Azure Monitor for SB).
 
 ## SRE Agent RCA
+
+Prompt: **"Why are Cosmos DB writes failing? Orders are not being persisted."**
+
+Expected reasoning chain (≥ 0.9 confidence):
 1. `QueryDependencyErrors(15m, "Cosmos")` → 100% failure rate, single `ExceptionType`.
 2. `TraceDrilldown(<trace_id from one failed order>)` → api-service span ok up to `dep.ServiceBus.send`; worker span `dep.Cosmos.upsert` fails with NameResolutionError.
 3. Agent suggests `nslookup` from pod (runbook command).

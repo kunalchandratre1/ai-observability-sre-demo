@@ -31,6 +31,10 @@ Then generate sustained traffic — click **Burst x10** in the UI several times 
 - **HPA** scales `api-service` from 2→ up to 10 (visible in `kubectl get hpa -n app -w`).
 
 ## SRE Agent RCA
+
+Prompt: **"Voice orders are slow. What is causing the latency increase?"**
+
+Expected reasoning chain (≥ 0.9 confidence):
 1. `QueryLatencyPercentiles(30m, "api-service")` → p95 increased ~ 800ms above baseline starting at T0.
 2. Cross-reference Grafana D1 CPU panel (Agent links it; AKS metrics live in Managed Prometheus).
 3. `DeploymentCorrelation(1h)` → no new deployment_version → not a code regression.
