@@ -34,7 +34,9 @@ This rewrites the Cosmos hostname inside the worker to `*.invalid-dns.azure.com`
 This simulates the real-world scenario where the **Cosmos Private Endpoint DNS Zone link is removed** from the AKS VNet — the hostname `*.documents.azure.com` no longer resolves to the private IP (`10.40.x.x`) and instead fails with `NXDOMAIN`.
 
 ## Symptoms (Grafana)
-- **D4 — Cosmos PE** → "DNS / PE resolution failures" table fills with `ExceptionType=NameResolutionError` (or `socket.gaierror`/`HttpRequestError`), `ExceptionMessage` containing `invalid-dns.azure.com`.
+- **UI dependency card** → `cosmos: { "status": "error" }` on every order.
+  > **Note on error type:** You may see either `NameResolutionError` or a `DefaultAzureCredential` auth failure depending on which part of the Cosmos SDK fails first when the hostname is unresolvable. Both are valid fault signals — the key indicator is `cosmos: error` in the UI and exception rows in ADX pointing to the broken endpoint (`invalid-dns.azure.com`).
+- **D4 — Cosmos PE** → "DNS / PE resolution failures" table fills with exception rows; `ExceptionMessage` will contain `invalid-dns.azure.com`.
 - **D1 — Golden Signals** → worker-service exceptions spike; api-service unaffected (writes are async via Service Bus).
 - Service Bus queue length grows (Azure Monitor for SB).
 
