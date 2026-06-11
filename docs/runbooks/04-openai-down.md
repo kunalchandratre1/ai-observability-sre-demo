@@ -29,7 +29,9 @@ Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
 ## SRE Agent RCA
 
-Prompt: **"Why are voice orders failing in the last 15 minutes?"**
+Prompt: **"Every voice order is failing instantly — the app accepts my voice but then immediately says it can't process the request. It's not even attempting to place the order. What is broken?"**
+
+> "Failing instantly" and "not even attempting" hint at a fast-fail path (no real API call). The agent must identify which processing step is short-circuiting and which dependency owns it — without the question naming OpenAI.
 
 Expected reasoning chain (≥ 0.9 confidence):
 - `QueryDependencyErrors(15m, "AzureOpenAI")` → 100% errors; ExceptionType=`DependencyError`; message references `fault_force_openai_down`.

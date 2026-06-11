@@ -28,9 +28,9 @@ Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
 ## SRE Agent RCA
 
-Prompt: **"Orders are completing but some data seems incomplete or missing a snippet. What is degraded?"**
+Prompt: **"No alerts are firing and orders seem to be going through. Do a proactive health check across all dependencies for the voice-orders service and tell me if anything is degraded."**
 
-> The third-party fault is non-fatal (orders still return 200), so the symptom is subtle degradation, not a hard failure. This tests whether the agent can classify severity correctly.
+> This scenario has no user-facing error and no alert — the only way to catch it is proactive telemetry inspection. The prompt simulates an on-call SRE doing a routine health check, not reacting to an incident. This tests whether the agent surfaces silent degradation rather than just chasing alert noise.
 
 Expected reasoning chain (≥ 0.9 confidence):
 1. `QueryDependencyErrors(15m, "ThirdPartyAPI")` → 100% errors.

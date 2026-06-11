@@ -28,7 +28,9 @@ Then click **Burst x10** in the UI 2–3 times to generate traffic.
 
 ## SRE Agent RCA
 
-Prompt: **"Why are voice orders failing in the last 15 minutes?"**
+Prompt: **"Customers are calling in to place orders but the system isn't recognising what they're saying at all — it's as if the voice isn't being heard. No orders are going through. What's wrong?"**
+
+> "Voice isn't being heard" and "not recognising" point to the speech transcription layer specifically, not order processing or AI reasoning. The agent must trace which dependency fails first in the request pipeline.
 
 Expected reasoning chain (≥ 0.9 confidence):
 `QueryDependencyErrors(15m, "AzureSpeech")` → 100% errors. Cross-check with `QueryDependencyErrors(15m, "AzureOpenAI")` → healthy → rules out shared identity/network root cause. Agent attributes failure to Speech endpoint specifically.
