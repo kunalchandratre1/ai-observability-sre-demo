@@ -15,6 +15,37 @@
 | 9 | `m9-faults` | All `docs/runbooks/0?-*.md`, `cosmos-private-endpoint.md`, `infra/scripts/60-fault-toggle.sh` |
 | 10 | `m10-demo` | `docs/demo-script.md`, `docs/postmortems/`, `docs/kql-prom-library.md` |
 
+---
+
+## Future roadmap
+
+### Scenario 9 — Firewall rule misconfiguration (infrastructure-layer fault)
+
+**Goal:** Prove the SRE Agent can identify a root cause that is *not* in code or deployments, but in Azure infrastructure config — specifically a firewall rule change that blocks Service Bus.
+
+**Approach:**
+- Fault toggle calls `az servicebus namespace update --public-network-access Disabled` (real Azure change, no code change)
+- SDK throws a genuine `ServiceBusAuthorizationError` — not synthetic
+- Agent must query **Azure Activity Log** (new `QueryAzureActivityLog` KQL tool) to find the `Microsoft.ServiceBus/namespaces/write` operation that changed `publicNetworkAccess=Disabled` and surface the caller + timestamp
+
+**Why it's distinct from existing scenarios:**
+| | Existing scenarios | Scenario 9 |
+|---|---|---|
+| Fault layer | Code toggle / APIM policy / DNS | Real Azure resource config change |
+| Root cause evidence | OTel spans / ADX exceptions | Azure Activity Log |
+| Agent tool needed | `QueryDependencyErrors`, `DeploymentCorrelation` | **`QueryAzureActivityLog`** (new) |
+| Remediation | Toggle flag / kubectl rollout undo | `az servicebus namespace update --public-network-access Enabled` |
+
+**Pre-requisite to verify before building:** Activity Logs must be exported to Log Analytics workspace (`monitoring.bicep`). If not already configured, a subscription-level diagnostic setting needs to be added.
+
+**Files to build:**
+- `infra/scripts/60-fault-toggle.ps1` and `.sh` — add `servicebus-firewall-block` case
+- `infra/sre-agent/kusto-tools/QueryAzureActivityLog.kql` — new KQL tool
+- SRE agent system prompt — register `QueryAzureActivityLog` as a callable tool
+- `docs/runbooks/09-servicebus-firewall.md` — new runbook
+
+---
+
 Push with:
 ```bash
 gh repo create kunalchandratre1/ai-observability-sre-demo --public --source . --remote origin
