@@ -219,3 +219,57 @@ Once implemented, add `app-exception-spike` to the alert rules table in `docs/ve
 **Priority:** Low  
 **Status:** Not implemented  
 **Solves:** Fault injection is currently manual (`infra/scripts/60-fault-toggle.sh`). Azure Chaos Studio experiments can run on a schedule or be triggered by CI/CD pipeline, enabling continuous resilience testing. Experiments would target the same fault scenarios (DNS break, rate limit, CPU saturation) with automated verification of SRE Agent response quality.
+
+---
+
+## R5 — Scenario 9: Firewall rule misconfiguration (infrastructure-layer fault)
+
+**Priority:** Medium  
+**Status:** Not implemented  
+**Solves:** All 8 existing fault scenarios are triggered via code toggles, APIM policy changes, or DNS rewrites — none simulate a pure **infrastructure configuration change** as the root cause. This scenario adds a fault where a firewall rule disables public access to Service Bus, causing real SDK-level connection failures that the SRE Agent must trace back to an Azure Activity Log event rather than application code.
+
+### Problem it demonstrates
+
+The SRE Agent currently has no `QueryAzureActivityLog` tool. Without it, it cannot answer: *"Nothing was deployed, but orders are failing — did someone change an Azure resource configuration?"* This is a common real-world scenario (a network engineer inadvertently tightens a firewall rule, or a policy enforcer auto-remediates a compliance violation).
+
+### Fault mechanism
+
+```powershell
+# Inject — blocks all public access to Service Bus
+az servicebus namespace update -g ai-obs-sre-demo --name <sb-name> --public-network-access Disabled
+
+# Remediate — restore
+az servicebus namespace update -g ai-obs-sre-demo --name <sb-name> --public-network-access Enabled
+```
+
+- No code change, no image rebuild — pure Azure resource config toggle
+- `azure-servicebus` SDK throws real `ServiceBusAuthorizationError` / `ConnectionRefusedError`
+- OTel span records the error → flows to ADX as a genuine dependency failure
+
+### SRE Agent reasoning chain
+
+```
+User: "Orders are queuing up and not being processed. Nothing was deployed. What changed?"
+  ↓
+QueryDependencyErrors(15m, "ServiceBus") → 100% errors, ServiceBusAuthorizationError
+  ↓
+DeploymentCorrelation(1h) → no new deployment_version → not a code regression
+  ↓
+QueryAzureActivityLog(1h) → finds Microsoft.ServiceBus/namespaces/write
+  setting publicNetworkAccess=Disabled at T-12min, Caller=<identity>
+  ↓
+Root cause: Firewall misconfiguration — Service Bus public network access disabled
+```
+
+### Files to build
+
+| File | Change |
+|---|---|
+| `infra/scripts/60-fault-toggle.ps1` / `.sh` | Add `servicebus-firewall-block` case |
+| `infra/sre-agent/kusto-tools/QueryAzureActivityLog.kql` | New KQL tool |
+| SRE agent system prompt | Register `QueryAzureActivityLog` as callable tool |
+| `docs/runbooks/09-servicebus-firewall.md` | New runbook |
+
+### Pre-requisite
+
+Verify Azure Activity Logs are exported to the Log Analytics workspace. If not, add a subscription-level diagnostic setting in `infra/bicep/modules/monitoring.bicep` to route Activity Logs to the existing LAW.
