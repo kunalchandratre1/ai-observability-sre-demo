@@ -273,3 +273,63 @@ Root cause: Firewall misconfiguration — Service Bus public network access disa
 ### Pre-requisite
 
 Verify Azure Activity Logs are exported to the Log Analytics workspace. If not, add a subscription-level diagnostic setting in `infra/bicep/modules/monitoring.bicep` to route Activity Logs to the existing LAW.
+
+---
+
+## R6 — Cosmos IncidentHistory as SRE Agent knowledge source
+
+**Priority:** Medium  
+**Status:** Not implemented (architecture diagram shows it as aspirational)  
+**Solves:** The SRE Agent currently has no memory of past incidents. Every investigation starts from scratch — it cannot answer *"has this exact failure pattern happened before, and what fixed it last time?"* Persisting structured postmortem records to Cosmos DB and exposing them as a `QueryIncidentHistory` tool gives the agent **institutional memory**.
+
+### How it works
+
+After each investigation the agent (or a thin automation wrapper) writes a structured record to a new Cosmos container `incidents/IncidentHistory`:
+
+```json
+{
+  "id": "inc-20260610-cosmos-dns",
+  "timestamp": "2026-06-10T17:03:00Z",
+  "fault_type": "cosmos-dns-break",
+  "symptom": "Orders placed but not visible in system",
+  "root_cause": "Cosmos DNS break — invalid-dns.azure.com hostname injected",
+  "affected_services": ["api-service", "worker-service"],
+  "resolution": "POST /api/admin/faults { fault_force_cosmos_dns_break: false }",
+  "ttd_minutes": 4,
+  "ttm_minutes": 1,
+  "sre_agent_confidence": 0.95,
+  "correlation_ids": ["5d43f970-220a-41f5-ba7a-7e07483306f4"]
+}
+```
+
+A new SRE Agent tool `QueryIncidentHistory` queries this container:
+
+```
+User: "Orders seem to be getting lost again."
+  ↓
+QueryIncidentHistory("orders lost") → finds inc-20260610-cosmos-dns
+  "This symptom matched a past incident on 2026-06-10.
+   Root cause was Cosmos DNS misconfiguration.
+   Resolved in 1 minute by resetting fault toggle."
+  ↓
+Agent immediately checks Cosmos dependency errors first (guided by history)
+  ↓
+Faster MTTR — agent skips the full dependency sweep and goes straight to highest-probability cause
+```
+
+### Value for the demo
+
+This transforms the scenario from *"agent diagnoses an incident"* to *"agent learns from past incidents and diagnoses faster"* — a fundamentally more impressive capability that resonates with enterprise SRE teams.
+
+### Files to build
+
+| File | Change |
+|---|---|
+| `infra/bicep/modules/cosmos.bicep` | Add `incidents` database + `IncidentHistory` container |
+| `infra/sre-agent/kusto-tools/QueryIncidentHistory.kql` | New Cosmos SQL query tool (or REST-based tool) |
+| SRE agent system prompt | Register `QueryIncidentHistory` as callable tool |
+| Postmortem writer script | Optional: `infra/scripts/70-write-postmortem.ps1` to persist records after each demo run |
+
+### Note on architecture diagram
+
+The `IncidentHistory` node already appears in `docs/architecture.md`. This roadmap item is the implementation work to make it real.
