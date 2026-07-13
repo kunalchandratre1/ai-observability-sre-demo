@@ -68,6 +68,14 @@ Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\
 bash infra/scripts/60-fault-toggle.sh cosmos-dns-break off
 ```
 
+**Option D — Restart api-service deployment (clears per-pod in-memory fault state):**
+```powershell
+kubectl rollout restart deployment/api-service -n app
+kubectl rollout status deployment/api-service -n app --timeout=120s
+```
+
+Use this if `-State off` clears one pod but DNS errors still continue from another replica.
+
 (Real fix: re-link `privatelink.documents.azure.com` to the AKS VNet, or correct DNS overrides.)
 
 ## Verification

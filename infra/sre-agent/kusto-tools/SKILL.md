@@ -53,6 +53,12 @@ Always start with `QueryRecentAppErrors` to get a baseline of what is failing, t
 **Parameters:** `timeRange` (default 30m), `apiOperation` (use "" for all)  
 **Returns:** Joined APIM errors with backend AppExceptions on `x-correlation-id`. No backend match = APIM fault. Backend match = backend fault.
 
+### Guardrail for Scenario 2 (APIM rate-limit / 429)
+- Use a short window first: `APIMvsBackendCorrelation(5m, "submit-order")`.
+- Prioritize APIM `Status=429` rows for conclusion.
+- Treat older backend `500` exceptions from previous scenarios as historical unless they are also present in the same short window.
+- If APIM 429 exists with no backend match on `correlation_id`, conclude APIM gateway policy fault.
+
 ---
 
 ## Tool: DeploymentCorrelation
@@ -68,6 +74,7 @@ Always start with `QueryRecentAppErrors` to get a baseline of what is failing, t
 1. **Start:** `QueryRecentAppErrors(timeRange="30m")` — what is failing?
 2. **If dependency errors:** `QueryDependencyErrors(dependency_name="<name>")` — which dependency?
 3. **If you have trace_id/correlation_id:** `TraceDrilldown(trace_id="<id>")` — full evidence chain
-4. **If APIM + backend mismatch:** `APIMvsBackendCorrelation()` — APIM fault vs backend fault
-5. **If errors started after a deploy:** `DeploymentCorrelation()` — which version is responsible?
-6. **If slow but not erroring:** `QueryLatencyPercentiles()` — latency degradation root cause
+4. **If APIM 4xx/429 incident:** start with `APIMvsBackendCorrelation(timeRange="5m", apiOperation="submit-order")` before broad app-error scans
+5. **If APIM + backend mismatch:** `APIMvsBackendCorrelation()` — APIM fault vs backend fault
+6. **If errors started after a deploy:** `DeploymentCorrelation()` — which version is responsible?
+7. **If slow but not erroring:** `QueryLatencyPercentiles()` — latency degradation root cause

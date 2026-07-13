@@ -22,9 +22,68 @@
         <header>*</header>
       </allowed-headers>
     </cors>
+
+    <set-variable name="cid" value="@(context.Request.Headers.GetValueOrDefault(&quot;x-correlation-id&quot;, Guid.NewGuid().ToString()))" />
+    <set-header name="x-correlation-id" exists-action="override">
+      <value>@((string)context.Variables[&quot;cid&quot;])</value>
+    </set-header>
+    <set-header name="x-request-id" exists-action="override">
+      <value>@(context.RequestId.ToString())</value>
+    </set-header>
+
     <rate-limit-by-key calls="1" renewal-period="60" counter-key="@(context.Subscription?.Id ?? &quot;anon&quot;)" />
   </inbound>
-  <backend><base /></backend>
-  <outbound><base /></outbound>
-  <on-error><base /></on-error>
+
+  <backend>
+    <base />
+  </backend>
+
+  <outbound>
+    <base />
+    <set-header name="x-correlation-id" exists-action="override">
+      <value>@((string)context.Variables["cid"])</value>
+    </set-header>
+    <set-header name="x-request-id" exists-action="override">
+      <value>@(context.RequestId.ToString())</value>
+    </set-header>
+    <log-to-eventhub logger-id="eh-diag-logger"><![CDATA[@{
+      var body = new JObject(
+        new JProperty("ts",             DateTime.UtcNow.ToString("o")),
+        new JProperty("apiId",          context.Api.Id),
+        new JProperty("apiName",        context.Api.Name),
+        new JProperty("operationName",  context.Operation?.Name ?? ""),
+        new JProperty("method",         context.Request.Method),
+        new JProperty("url",            context.Request.OriginalUrl.ToString()),
+        new JProperty("backendUrl",     context.Api.ServiceUrl.ToString()),
+        new JProperty("requestId",      context.RequestId.ToString()),
+        new JProperty("correlationId",  context.Variables.ContainsKey("cid") ? (string)context.Variables["cid"] : ""),
+        new JProperty("traceparent",    context.Request.Headers.ContainsKey("traceparent") ? context.Request.Headers.GetValueOrDefault("traceparent","") : string.Format("00-{0}-{1}-01", ((string)(context.Variables.ContainsKey("cid") ? context.Variables["cid"] : context.RequestId.ToString())).Replace("-","").PadRight(32,'0').Substring(0,32), context.RequestId.ToString().Replace("-","").Substring(0,16))),
+        new JProperty("subscriptionId", context.Subscription?.Id ?? ""),
+        new JProperty("clientIp",       context.Request.IpAddress),
+        new JProperty("status",         context.Response.StatusCode),
+        new JProperty("backendStatus",  context.Response.StatusCode),
+        new JProperty("totalTimeMs",    (DateTime.UtcNow - context.Timestamp).TotalMilliseconds)
+      );
+      return body.ToString(Newtonsoft.Json.Formatting.None);
+    }]]></log-to-eventhub>
+  </outbound>
+
+  <on-error>
+    <base />
+    <log-to-eventhub logger-id="eh-diag-logger"><![CDATA[@{
+      var body = new JObject(
+        new JProperty("ts",            DateTime.UtcNow.ToString("o")),
+        new JProperty("apiId",         context.Api.Id),
+        new JProperty("operationName", context.Operation?.Name ?? ""),
+        new JProperty("requestId",     context.RequestId.ToString()),
+        new JProperty("correlationId", context.Variables.ContainsKey("cid") ? (string)context.Variables["cid"] : ""),
+        new JProperty("traceparent",   context.Request.Headers.GetValueOrDefault("traceparent","")),
+        new JProperty("status",        context.Response?.StatusCode ?? 0),
+        new JProperty("errorReason",   context.LastError?.Reason ?? ""),
+        new JProperty("errorMessage",  context.LastError?.Message ?? ""),
+        new JProperty("totalTimeMs",   (DateTime.UtcNow - context.Timestamp).TotalMilliseconds)
+      );
+      return body.ToString(Newtonsoft.Json.Formatting.None);
+    }]]></log-to-eventhub>
+  </on-error>
 </policies>

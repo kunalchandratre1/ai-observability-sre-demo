@@ -64,10 +64,24 @@ export APIM="aiosre-apim-demo"
 **Runbook:** `docs/runbooks/01-backend-api-fault.md`
 
 ### Inject
+Choose **any one** of the three methods — they all call the same admin endpoint:
+
+**Option A — UI button (easiest, no terminal needed)**
+> In the browser at `https://aiosre-ui-demo.azurewebsites.net`, scroll to **Fault toggles** → click **Force exception**.
+
+**Option B — PowerShell (Windows / VS Code terminal)**
+```powershell
+# Run from repo root
+Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"
+Get-Content infra/scripts/.env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.+)') { [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim(), 'Process') } }
+./infra/scripts/60-fault-toggle.ps1 -Scenario exception -State on
+```
+
+**Option C — Bash / WSL**
 ```bash
+source infra/scripts/.env
 bash infra/scripts/60-fault-toggle.sh exception on
 ```
-Or from PowerShell via the UI **Fault toggles** section → click **Force exception**.
 
 ### Drive traffic
 Click **Burst x10** in the UI 2–3 times.
@@ -96,10 +110,18 @@ Why are voice orders failing in the last 15 minutes?
 **Root cause stated by agent:** *api-service raising synthetic unhandled exception (admin fault toggle)*
 
 ### Remediate
+**Option A — UI:** Click **Reset all** in the Fault toggles section.
+
+**Option B — PowerShell:**
+```powershell
+Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\ai-observability-sre-demo"
+./infra/scripts/60-fault-toggle.ps1 -Scenario exception -State off
+```
+
+**Option C — Bash:**
 ```bash
 bash infra/scripts/60-fault-toggle.sh exception off
 ```
-Or click **Reset all** in the UI fault toggles.
 
 ### Verify green
 - [ ] D1 errors panel returns to baseline within 1 minute

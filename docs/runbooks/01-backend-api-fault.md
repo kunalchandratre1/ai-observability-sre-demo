@@ -64,6 +64,14 @@ Set-Location "D:\Customers\Bajaj Finance\End To End Monitoring\SRE Grafana Demo\
 bash infra/scripts/60-fault-toggle.sh exception off
 ```
 
+**Option D — Restart api-service deployment (clears per-pod in-memory fault state):**
+```powershell
+kubectl rollout restart deployment/api-service -n app
+kubectl rollout status deployment/api-service -n app --timeout=120s
+```
+
+Use this if `-State off` clears one pod but exceptions still continue from another replica.
+
 ## Verification
 - D1 errors panel returns to baseline within 1 minute.
 - APIM 5xx rate drops to 0; `Successful Requests` recovers.
